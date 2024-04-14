@@ -7,7 +7,7 @@ import os
 import sys
 import pdb
 
-pcd1 = PyntCloud.from_file("/ArtificialPointClouds/bunny.pcd")
+pcd1 = PyntCloud.from_file("./ArtificialPointClouds/sample_000000.ply")
 #pcd1 = PyntCloud.from_file("/TetrahedronMultiple.pcd")
 #pcd1 = PyntCloud.from_file("/ArtificialPointClouds/CubeFractal2.pcd")
 output_dir = "./detected_edge/"
@@ -81,8 +81,11 @@ pcd_pd['red'] = sigma_value.astype(np.uint8)
 pcd_points = PyntCloud(pcd_pd)
 edge_points = PyntCloud(pd.DataFrame(data=edge_np,columns=clmns))
 
-# pcd_points.plot()
-# edge_points.plot()
+pcd_points.plot()
+edge_points.plot()
 
 PyntCloud.to_file(pcd_points,output_dir+'pointcloud_edges.ply')   # Save the whole point cloud by painting the edge points
 PyntCloud.to_file(edge_points,output_dir+'edges.ply')             # Save just the edge points
+
+# ply = PyntCloud.from_file(output_dir+'pointcloud_edges.ply')
+# ply.plot()
