@@ -60,7 +60,7 @@ def extract_edge(pcd1_path, output_dir, k_n = 50, thresh = 0.03):
     #img = ax.scatter(x, y, z, c=sigma, cmap=plt.hot())
 
     fig.colorbar(img)
-    plt.show()
+    # plt.show()
 
     # Save the edges and point cloud
     thresh_min = sigma_value < thresh

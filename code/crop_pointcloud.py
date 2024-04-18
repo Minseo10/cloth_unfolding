@@ -2,6 +2,7 @@ import os
 import open3d as o3d
 import numpy as np
 import cal_camera_vec
+import pyrealsense2 as rs
 
 # position_in_meters =  {
 #     "x": -1.3044313379641588,
@@ -15,10 +16,25 @@ import cal_camera_vec
 # }
 # front_vector, look_at_vector, up_vector = cal_camera_vec.cal_camera_vec(position_in_meters, rotation_euler_xyz_in_radians)
 
+def bbox_to_3d(bbox_coordinates):
+    x, y, w, h = bbox_coordinates
+    points = [[x, y], [x+w, y], [x, y+h], [x+w, y+h]]
+
+    world_points = []
+
+    for point in points:
+        world_point = rs.rs2_deproject_pixel_to_point(depth_intrin, [int(point[0]), int(point[1])],
+                                                      depth_frame.get_distance(int(point[0]), int(point[1])))
+        if world_point[2] == 0.0:
+            continue
+        world_points.append(world_point)
+
+    print("3D Bounding box points: \n", world_points)
+
 
 def crop(input_ply_path, output_ply_path, front_vector, look_at_vector, up_vector):
     pcd = o3d.io.read_point_cloud(input_ply_path)
-    bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(-0.5, -0.3, 0.2), max_bound=(0.5, 0.2, 3))
+    bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(-0.5, -0.3, 0.1), max_bound=(0.5, 0.2, 3))
     # bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(-0.5, -0.5, -3), max_bound=(0.5, 0.5, 0.9))
     # bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min, min, min), max_bound=(max, 2, max))
     cropped = pcd.crop(bbox)

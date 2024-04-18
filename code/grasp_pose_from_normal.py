@@ -2,11 +2,12 @@ import open3d as o3d
 import numpy as np
 import cal_camera_vec
 import Difference_Eigenvalues as de
-import crop_pcd
+import crop_pointcloud
+import segment_crop as seg
 import json
 import os
 
-root_path = "/home/minseo/cc_dataset/sample_000003/"
+root_path = "/home/minseo/cloth_competition_dataset_0001/sample_000002/"
 min = -4
 max = 4
 
@@ -38,8 +39,29 @@ def calculate_grasp_point(json_path):
     # Calculate actual grasp point by moving grasp point along grasp direction by given distance
     actual_grasp_point = np.array([x, y, z]) - distance * grasp_dir_vec
 
-    return actual_grasp_point
+    return actual_grasp_point, R
 
+def rotation_matrix_to_rpy(rotation_matrix):
+    # Extract roll (x-axis rotation)
+    roll = np.arctan2(rotation_matrix[2][1], rotation_matrix[2][2])
+
+    # Extract pitch (y-axis rotation)
+    pitch = np.arctan2(-rotation_matrix[2][0], np.sqrt(rotation_matrix[2][1]**2 + rotation_matrix[2][2]**2))
+
+    # Extract yaw (z-axis rotation)
+    yaw = np.arctan2(rotation_matrix[1][0], rotation_matrix[0][0])
+
+    return roll, pitch, yaw
+
+# Example rotation matrix
+rotation_matrix = np.array([
+    [1, 0, 0],
+    [0, np.cos(np.pi/4), -np.sin(np.pi/4)],
+    [0, np.sin(np.pi/4), np.cos(np.pi/4)]
+])
+
+# Calculate roll, pitch, yaw
+roll, pitch, yaw = rotation_matrix_to_rpy(rotation_matrix)
 
 # camera info
 camera_pose_filename = root_path + "observation_start/camera_pose_in_world.json"
@@ -48,17 +70,18 @@ look_at_vector[0] += 2
 
 
 # cloth segmentation
-
-
+mask, output_dir = seg.segmentation(root_path)
+largest_bbox_coordinates, contour = seg.contour(mask, output_dir)
 
 # crop pointcloud.ply along segmentation
-# 일단은 임의로 crop
 input_ply_path = root_path + "observation_start/point_cloud.ply"
 pcd_dir = root_path + "detected_edge/"
-pcd_filepath = pcd_dir + "cropped_pcd.ply"
+depth_image_path = root_path + f"observation_start/depth_image.jpg"
+intrinsic_path = root_path + f"observation_start/camera_intrinsics.json"
+pcd_filepath = pcd_dir + "crop.ply"
 if not os.path.exists(pcd_dir):
     os.makedirs(pcd_dir)
-crop_pcd.crop(input_ply_path, pcd_filepath, front_vector, look_at_vector, up_vector)
+seg.crop(largest_bbox_coordinates, contour, depth_image_path, intrinsic_path, camera_pose_filename, input_ply_path, pcd_filepath, front_vector, look_at_vector, up_vector)
 
 
 # edge extraction
@@ -80,7 +103,7 @@ pcd.estimate_normals(
 # best point selection
 # 현재는 bring real grasp point from grasp_pose.json
 grasp_pose_filepath = root_path + "grasp/grasp_pose.json"
-best_point = calculate_grasp_point(grasp_pose_filepath)
+best_point, grasp_pose = calculate_grasp_point(grasp_pose_filepath)
 
 
 # find corresponding point in point cloud
@@ -105,6 +128,29 @@ pcd.orient_normals_consistent_tangent_plane(k=15)
 
 
 # grasp direction (vector) -> grasp pose (rpy)
+# Calculate world frame's z-axis in camera frame
+z_axis_world = np.array([0, 0, 1])
+grasp_x = np.cross(z_axis_world, normal)
+grasp_x /= np.linalg.norm(grasp_x)
+grasp_x = (-1) * grasp_x
+grasp_y = z_axis_world
+grasp_y = (-1) * grasp_y
+grasp_z = normal
+grasp_z /= np.linalg.norm(normal)
+grasp_z = (-1) * grasp_z
+
+# world frame에 대한 grasp pose
+grasp_R = [[grasp_x[0], grasp_y[0], grasp_z[0]], [grasp_x[1], grasp_y[1], grasp_z[1]], [grasp_x[2], grasp_y[2], grasp_z[2]]]
+mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+# grasp_R = mesh.get_rotation_matrix_from_xyz((roll, pitch, yaw)) # grasp pose w.r.t world frame
+mesh.rotate(grasp_R, center=(0, 0, 0)) # change to best point
+# mesh.rotate([[1, 0, 0], [0,1,0], [0,0,1]], center=(0,0,0))
+
+# roll pitch yaw
+roll, pitch, yaw = rotation_matrix_to_rpy(grasp_R)
+print("Roll (radians):", roll)
+print("Pitch (radians):", pitch)
+print("Yaw (radians):", yaw)
 
 
 # visualize grasp pose at the grasp point
@@ -115,12 +161,19 @@ line_set = o3d.geometry.LineSet(
     points=o3d.utility.Vector3dVector([start_point, end_point]),
     lines=o3d.utility.Vector2iVector([[0, 1]]),
 )
-line_set.colors = o3d.utility.Vector3dVector([[0, 1, 0]])
-line_set_line_width = 1
+line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]])
+line_set_line_width = 4
 
-o3d.visualization.draw_geometries([pcd, line_set],
+o3d.visualization.draw_geometries([pcd, line_set, mesh],
                                   zoom=0.1,
                                   front=front_vector,
                                   lookat=look_at_vector,
                                   up=up_vector,
                                   point_show_normal=False)
+#
+# o3d.visualization.draw_geometries([edge_pcd],
+#                                   zoom=0.1,
+#                                   front=front_vector,
+#                                   lookat=look_at_vector,
+#                                   up=up_vector,
+#                                   point_show_normal=True)
