@@ -80,6 +80,28 @@ def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
     return point, normal
 
 
+# sharp edge 위의 점들 중 x 축으로 가장 톡 튀어 나와있는 점을 best point 라고 찾고, 그 점에서의 normal vector 예측값을 grasp direction 으로 찾는 방식
+def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd):
+    edge_points = np.asarray(edge_pcd.points)
+    point_idx = np.argmin(edge_points[:, 0]) # idx in edge points array
+    best_point = edge_points[point_idx]
+
+    # check min x point with blue color
+    point_colors = np.asarray(edge_pcd.colors)
+    point_colors[point_idx] = [0, 0, 1]
+    edge_pcd.colors = o3d.utility.Vector3dVector(point_colors)
+    o3d.visualization.draw_geometries([edge_pcd])
+
+    distances = np.linalg.norm(origin_pcd.points - best_point, axis=1)
+    min_distance_index = np.argmin(distances)
+    normal = np.asarray(origin_pcd.normals)[min_distance_index]
+
+    print("Best point: ", point, "\n")
+    print("Normal vector: ", normal, "\n")
+
+    return best_point, normal
+
+
 if __name__ == '__main__':
     root_path = "/home/minseo/cloth_competition_dataset_0001/sample_000002/"
     root_path = "../datasets/cloth_competition_dataset_0001/sample_000002/"
@@ -132,8 +154,9 @@ if __name__ == '__main__':
     )
 
     # find corresponding point in point cloud
-    # edge_pcd = o3d.io.read_point_cloud("/home/hjeong/code/minseo/Edge_Extraction/datasets/cloth_competition_dataset_0000/sample_000002/detected_edge/edges.ply") # TODO:: delete
-    point, normal = find_best_point_and_normal_vector(root_path, pcd, edge_pcd)
+    edge_pcd = o3d.io.read_point_cloud("/home/hjeong/code/minseo/Edge_Extraction/datasets/cloth_competition_dataset_0000/sample_000002/detected_edge/edges.ply") # TODO:: delete
+    # point, normal = find_best_point_and_normal_vector(root_path, pcd, edge_pcd)
+    point, normal = find_best_point_and_normal_vector_2(pcd, edge_pcd)
 
     # normal vector 옷 바깥쪽으로 뒤집기
     pcd.orient_normals_consistent_tangent_plane(k=15)
