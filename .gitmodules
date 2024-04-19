@@ -1,0 +1,3 @@
+[submodule "cloths_segmentation"]
+	path = cloths_segmentation
+	url = https://github.com/ternaus/cloths_segmentation.git
