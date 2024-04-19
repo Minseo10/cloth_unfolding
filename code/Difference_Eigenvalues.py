@@ -8,8 +8,8 @@ import sys
 import pdb
 import open3d as o3d
 
-pcd1 = PyntCloud.from_file("/home/minseo/cc_dataset/sample_000002/detected_edge/extracted_pcd.ply")
-output_dir = "../detected_edge/"
+# pcd1 = PyntCloud.from_file("/home/minseo/cc_dataset/sample_000002/detected_edge/extracted_pcd.ply")
+# output_dir = "../detected_edge/"
 
 def extract_edge(pcd1_path, output_dir, k_n = 50, thresh = 0.03):
 
