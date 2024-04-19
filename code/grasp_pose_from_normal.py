@@ -8,8 +8,7 @@ import json
 import os
 
 MIN = -4
-min = -4
-max = 4
+MAX = 4
 
 
 def calculate_grasp_point(json_path):
