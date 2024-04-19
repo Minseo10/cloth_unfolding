@@ -53,6 +53,7 @@ def rotation_matrix_to_rpy(rotation_matrix):
     return roll, pitch, yaw
 
 
+# annotated grasp pose given by organizer
 def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
     # best point selection
     # 현재는 bring real grasp point from grasp_pose.json
