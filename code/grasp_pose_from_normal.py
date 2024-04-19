@@ -7,7 +7,7 @@ import segment_crop as seg
 import json
 import os
 
-root_path = "/home/minseo/cloth_competition_dataset_0001/sample_000002/"
+MIN = -4
 min = -4
 max = 4
 
@@ -55,6 +55,8 @@ def rotation_matrix_to_rpy(rotation_matrix):
 
 
 if __name__ == '__main__':
+    root_path = "/home/minseo/cloth_competition_dataset_0001/sample_000002/"
+
     # Example rotation matrix
     rotation_matrix = np.array([
         [1, 0, 0],
