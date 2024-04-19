@@ -53,8 +53,35 @@ def rotation_matrix_to_rpy(rotation_matrix):
     return roll, pitch, yaw
 
 
+def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
+    # best point selection
+    # 현재는 bring real grasp point from grasp_pose.json
+    grasp_pose_filepath = root_path + "grasp/grasp_pose.json"
+    best_point, grasp_pose = calculate_grasp_point(grasp_pose_filepath)
+
+    points_array = np.asarray(origin_pcd.points)
+    normals_array = np.asarray(origin_pcd.normals)
+    min_dist = 1000000
+    best_point_idx = 0
+
+    for i in range(points_array.shape[0]):
+        dist = np.linalg.norm(points_array[i] - best_point)
+        if dist < min_dist:
+            min_dist = dist
+            best_point_idx = i
+
+    point = points_array[best_point_idx]
+    normal = normals_array[best_point_idx]
+
+    print("Best point: ", point, "\n")
+    print("Normal vector: ", normal, "\n")
+
+    return point, normal
+
+
 if __name__ == '__main__':
     root_path = "/home/minseo/cloth_competition_dataset_0001/sample_000002/"
+    root_path = "../datasets/cloth_competition_dataset_0001/sample_000002/"
 
     # Example rotation matrix
     rotation_matrix = np.array([
@@ -103,29 +130,9 @@ if __name__ == '__main__':
         search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
     )
 
-
-    # best point selection
-    # 현재는 bring real grasp point from grasp_pose.json
-    grasp_pose_filepath = root_path + "grasp/grasp_pose.json"
-    best_point, grasp_pose = calculate_grasp_point(grasp_pose_filepath)
-
-
     # find corresponding point in point cloud
-    points_array = np.asarray(pcd.points)
-    normals_array = np.asarray(pcd.normals)
-    min_dist = 1000000
-    best_point_idx = 0
-
-    for i in range(points_array.shape[0]):
-        dist = np.linalg.norm(points_array[i] - best_point)
-        if dist < min_dist:
-            min_dist = dist
-            best_point_idx = i
-    point = points_array[best_point_idx]
-    normal = normals_array[best_point_idx]
-    print("Best point: ", point, "\n")
-    print("Normal vector: ", normal, "\n")
-
+    # edge_pcd = o3d.io.read_point_cloud("/home/hjeong/code/minseo/Edge_Extraction/datasets/cloth_competition_dataset_0000/sample_000002/detected_edge/edges.ply") # TODO:: delete
+    point, normal = find_best_point_and_normal_vector(root_path, pcd, edge_pcd)
 
     # normal vector 옷 바깥쪽으로 뒤집기
     pcd.orient_normals_consistent_tangent_plane(k=15)
