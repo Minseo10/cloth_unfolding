@@ -140,8 +140,8 @@ if __name__ == '__main__':
 
     # edge extraction
     pcd = o3d.io.read_point_cloud(pcd_filepath)
-    edge_filepath = root_path + "detected_edge/edges.ply"
-    de.extract_edge(pcd_filepath, edge_filepath)  # from Difference_Eigenvalues.py
+    edge_output_dir = root_path + "detected_edge/"
+    de.extract_edge(pcd_filepath, edge_output_dir)  # from Difference_Eigenvalues.py
     edge_pcd = o3d.io.read_point_cloud(edge_filepath)
     edge_points = np.asarray(edge_pcd.points)
     print(edge_points)
