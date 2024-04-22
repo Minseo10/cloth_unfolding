@@ -142,9 +142,6 @@ if __name__ == '__main__':
     pcd = o3d.io.read_point_cloud(pcd_filepath)
     edge_output_dir = root_path + "detected_edge/"
     de.extract_edge(pcd_filepath, edge_output_dir)  # from Difference_Eigenvalues.py
-    edge_pcd = o3d.io.read_point_cloud(edge_filepath)
-    edge_points = np.asarray(edge_pcd.points)
-    print(edge_points)
     nearest_point = edge_points[edge_points[:, 0] < -0.12883484]
 
 
@@ -154,7 +151,9 @@ if __name__ == '__main__':
     )
 
     # find corresponding point in point cloud
-    edge_pcd = o3d.io.read_point_cloud("/home/hjeong/code/minseo/Edge_Extraction/datasets/cloth_competition_dataset_0000/sample_000002/detected_edge/edges.ply") # TODO:: delete
+    edge_pcd_filepath = edge_output_dir + de.EDGE_FILENAME
+    edge_pcd = o3d.io.read_point_cloud(edge_pcd_filepath) # TODO:: delete
+
     # point, normal = find_best_point_and_normal_vector(root_path, pcd, edge_pcd)
     point, normal = find_best_point_and_normal_vector_2(pcd, edge_pcd)
 
