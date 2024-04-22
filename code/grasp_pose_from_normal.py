@@ -81,7 +81,7 @@ def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
 
 
 # sharp edge 위의 점들 중 x 축으로 가장 톡 튀어 나와있는 점을 best point 라고 찾고, 그 점에서의 normal vector 예측값을 grasp direction 으로 찾는 방식
-def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd):
+def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd, output_path):
     edge_points = np.asarray(edge_pcd.points)
     point_idx = np.argmin(edge_points[:, 0]) # idx in edge points array
     best_point = edge_points[point_idx]
@@ -100,6 +100,9 @@ def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd):
     point_colors[matching_indices] = [0, 0, 1]
     edge_pcd.colors = o3d.utility.Vector3dVector(point_colors)
     o3d.visualization.draw_geometries([edge_pcd])
+
+    if output_path:
+        o3d.io.write_point_cloud(output_path, edge_pcd)
 
     distances = np.linalg.norm(origin_pcd.points - best_point, axis=1)
     min_distance_index = np.argmin(distances)
@@ -164,7 +167,7 @@ if __name__ == '__main__':
     edge_pcd = o3d.io.read_point_cloud(edge_pcd_filepath) # TODO:: delete
 
     # point, normal = find_best_point_and_normal_vector(root_path, pcd, edge_pcd)
-    point, normal = find_best_point_and_normal_vector_2(pcd, edge_pcd)
+    point, normal = find_best_point_and_normal_vector_2(pcd, edge_pcd, edge_output_dir + "ftn2.ply")
 
     # normal vector 옷 바깥쪽으로 뒤집기
     pcd.orient_normals_consistent_tangent_plane(k=15)
