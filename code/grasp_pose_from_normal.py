@@ -191,8 +191,6 @@ if __name__ == '__main__':
     pcd = o3d.io.read_point_cloud(pcd_filepath)
     edge_output_dir = root_path + "detected_edge/"
     de.extract_edge(pcd_filepath, edge_output_dir)  # from Difference_Eigenvalues.py
-    nearest_point = edge_points[edge_points[:, 0] < -0.12883484]
-
 
     # estimate normal vectors
     pcd.estimate_normals(
