@@ -88,7 +88,16 @@ def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd):
 
     # check min x point with blue color
     point_colors = np.asarray(edge_pcd.colors)
-    point_colors[point_idx] = [0, 0, 1]
+
+    # check min x point with blue color
+    tolerance = 0.01
+    x_condition = (edge_points[:, 0] >= best_point[0] - tolerance) & (edge_points[:, 0] <= best_point[0] + tolerance)
+    y_condition = (edge_points[:, 1] >= best_point[1] - tolerance) & (edge_points[:, 1] <= best_point[1] + tolerance)
+    z_condition = (edge_points[:, 2] >= best_point[2] - tolerance) & (edge_points[:, 2] <= best_point[2] + tolerance)
+    matching_indices = np.where(x_condition & y_condition & z_condition)[0]
+
+    point_colors[:] = [1, 0, 0]
+    point_colors[matching_indices] = [0, 0, 1]
     edge_pcd.colors = o3d.utility.Vector3dVector(point_colors)
     o3d.visualization.draw_geometries([edge_pcd])
 
@@ -96,7 +105,7 @@ def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd):
     min_distance_index = np.argmin(distances)
     normal = np.asarray(origin_pcd.normals)[min_distance_index]
 
-    print("Best point: ", point, "\n")
+    print("Best point: ", best_point, "\n")
     print("Normal vector: ", normal, "\n")
 
     return best_point, normal
