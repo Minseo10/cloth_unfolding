@@ -114,6 +114,43 @@ def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd, output_path):
     return best_point, normal
 
 
+# 가장 뾰족한 점은 max sigma (red color value) 를 갖고 있고, 상당히 앞에 나와 있는 점들 중 가장 뾰족한 점을 best point 로 선정, grasp direction 은 normal vector
+def find_best_point_and_normal_vector_3(origin_pcd, edge_pcd, output_path):
+    edge_points = np.asarray(edge_pcd.points)
+    colors = np.asarray(edge_pcd.colors)
+
+    condition1 = edge_points[:, 0] < np.min(edge_points[:, 0]) + 0.05
+    condition2 = edge_points[:, 1] < np.max(edge_points[:, 1]) - 0.05
+    condition = condition1 & condition2
+    colors[~condition] = [0, 0, 0]
+    point_idx = np.argmax(colors[:, 0])
+    best_point = edge_points[point_idx]
+
+    # check min x point with blue color
+    tolerance = 0.01
+    x_condition = (edge_points[:, 0] >= best_point[0] - tolerance) & (edge_points[:, 0] <= best_point[0] + tolerance)
+    y_condition = (edge_points[:, 1] >= best_point[1] - tolerance) & (edge_points[:, 1] <= best_point[1] + tolerance)
+    z_condition = (edge_points[:, 2] >= best_point[2] - tolerance) & (edge_points[:, 2] <= best_point[2] + tolerance)
+    matching_indices = np.where(x_condition & y_condition & z_condition)[0]
+
+    colors[:] = [1, 0, 0]
+    colors[matching_indices] = [0, 0, 1]
+    edge_pcd.colors = o3d.utility.Vector3dVector(colors)
+    o3d.visualization.draw_geometries([edge_pcd])
+
+    if output_path:
+        o3d.io.write_point_cloud(output_path, edge_pcd)
+
+    distances = np.linalg.norm(origin_pcd.points - best_point, axis=1)
+    min_distance_index = np.argmin(distances)
+    normal = np.asarray(origin_pcd.normals)[min_distance_index]
+
+    print("Best point: ", point, "\n")
+    print("Normal vector: ", normal, "\n")
+
+    return best_point, normal
+
+
 if __name__ == '__main__':
     root_path = "/home/minseo/cloth_competition_dataset_0001/sample_000002/"
     root_path = "../datasets/cloth_competition_dataset_0001/sample_000002/"
@@ -168,6 +205,7 @@ if __name__ == '__main__':
 
     # point, normal = find_best_point_and_normal_vector(root_path, pcd, edge_pcd)
     point, normal = find_best_point_and_normal_vector_2(pcd, edge_pcd, edge_output_dir + "ftn2.ply")
+    point, normal = find_best_point_and_normal_vector_3(pcd, edge_pcd, edge_output_dir + "ftn3.ply")
 
     # normal vector 옷 바깥쪽으로 뒤집기
     pcd.orient_normals_consistent_tangent_plane(k=15)
