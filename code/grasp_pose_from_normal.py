@@ -81,16 +81,65 @@ def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
 
 
 # sharp edge 위의 점들 중 x 축으로 가장 톡 튀어 나와있는 점을 best point 라고 찾고, 그 점에서의 normal vector 예측값을 grasp direction 으로 찾는 방식
-def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd):
+def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd, output_path):
     edge_points = np.asarray(edge_pcd.points)
     point_idx = np.argmin(edge_points[:, 0]) # idx in edge points array
     best_point = edge_points[point_idx]
 
     # check min x point with blue color
     point_colors = np.asarray(edge_pcd.colors)
-    point_colors[point_idx] = [0, 0, 1]
+
+    # check min x point with blue color
+    tolerance = 0.01
+    x_condition = (edge_points[:, 0] >= best_point[0] - tolerance) & (edge_points[:, 0] <= best_point[0] + tolerance)
+    y_condition = (edge_points[:, 1] >= best_point[1] - tolerance) & (edge_points[:, 1] <= best_point[1] + tolerance)
+    z_condition = (edge_points[:, 2] >= best_point[2] - tolerance) & (edge_points[:, 2] <= best_point[2] + tolerance)
+    matching_indices = np.where(x_condition & y_condition & z_condition)[0]
+
+    point_colors[:] = [1, 0, 0]
+    point_colors[matching_indices] = [0, 0, 1]
     edge_pcd.colors = o3d.utility.Vector3dVector(point_colors)
     o3d.visualization.draw_geometries([edge_pcd])
+
+    if output_path:
+        o3d.io.write_point_cloud(output_path, edge_pcd)
+
+    distances = np.linalg.norm(origin_pcd.points - best_point, axis=1)
+    min_distance_index = np.argmin(distances)
+    normal = np.asarray(origin_pcd.normals)[min_distance_index]
+
+    print("Best point: ", best_point, "\n")
+    print("Normal vector: ", normal, "\n")
+
+    return best_point, normal
+
+
+# 가장 뾰족한 점은 max sigma (red color value) 를 갖고 있고, 상당히 앞에 나와 있는 점들 중 가장 뾰족한 점을 best point 로 선정, grasp direction 은 normal vector
+def find_best_point_and_normal_vector_3(origin_pcd, edge_pcd, output_path):
+    edge_points = np.asarray(edge_pcd.points)
+    colors = np.asarray(edge_pcd.colors)
+
+    condition1 = edge_points[:, 0] < np.min(edge_points[:, 0]) + 0.05
+    condition2 = edge_points[:, 1] < np.max(edge_points[:, 1]) - 0.05
+    condition = condition1 & condition2
+    colors[~condition] = [0, 0, 0]
+    point_idx = np.argmax(colors[:, 0])
+    best_point = edge_points[point_idx]
+
+    # check min x point with blue color
+    tolerance = 0.01
+    x_condition = (edge_points[:, 0] >= best_point[0] - tolerance) & (edge_points[:, 0] <= best_point[0] + tolerance)
+    y_condition = (edge_points[:, 1] >= best_point[1] - tolerance) & (edge_points[:, 1] <= best_point[1] + tolerance)
+    z_condition = (edge_points[:, 2] >= best_point[2] - tolerance) & (edge_points[:, 2] <= best_point[2] + tolerance)
+    matching_indices = np.where(x_condition & y_condition & z_condition)[0]
+
+    colors[:] = [1, 0, 0]
+    colors[matching_indices] = [0, 0, 1]
+    edge_pcd.colors = o3d.utility.Vector3dVector(colors)
+    o3d.visualization.draw_geometries([edge_pcd])
+
+    if output_path:
+        o3d.io.write_point_cloud(output_path, edge_pcd)
 
     distances = np.linalg.norm(origin_pcd.points - best_point, axis=1)
     min_distance_index = np.argmin(distances)
@@ -140,13 +189,8 @@ if __name__ == '__main__':
 
     # edge extraction
     pcd = o3d.io.read_point_cloud(pcd_filepath)
-    edge_filepath = root_path + "detected_edge/edges.ply"
-    de.extract_edge(pcd_filepath, edge_filepath)  # from Difference_Eigenvalues.py
-    edge_pcd = o3d.io.read_point_cloud(edge_filepath)
-    edge_points = np.asarray(edge_pcd.points)
-    print(edge_points)
-    nearest_point = edge_points[edge_points[:, 0] < -0.12883484]
-
+    edge_output_dir = root_path + "detected_edge/"
+    de.extract_edge(pcd_filepath, edge_output_dir)  # from Difference_Eigenvalues.py
 
     # estimate normal vectors
     pcd.estimate_normals(
@@ -154,9 +198,12 @@ if __name__ == '__main__':
     )
 
     # find corresponding point in point cloud
-    edge_pcd = o3d.io.read_point_cloud("/home/hjeong/code/minseo/Edge_Extraction/datasets/cloth_competition_dataset_0000/sample_000002/detected_edge/edges.ply") # TODO:: delete
+    edge_pcd_filepath = edge_output_dir + de.EDGE_FILENAME
+    edge_pcd = o3d.io.read_point_cloud(edge_pcd_filepath) # TODO:: delete
+
     # point, normal = find_best_point_and_normal_vector(root_path, pcd, edge_pcd)
-    point, normal = find_best_point_and_normal_vector_2(pcd, edge_pcd)
+    point, normal = find_best_point_and_normal_vector_2(pcd, edge_pcd, edge_output_dir + "ftn2.ply")
+    point, normal = find_best_point_and_normal_vector_3(pcd, edge_pcd, edge_output_dir + "ftn3.ply")
 
     # normal vector 옷 바깥쪽으로 뒤집기
     pcd.orient_normals_consistent_tangent_plane(k=15)

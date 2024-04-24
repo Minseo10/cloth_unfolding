@@ -11,7 +11,10 @@ import open3d as o3d
 # pcd1 = PyntCloud.from_file("/home/minseo/cc_dataset/sample_000002/detected_edge/extracted_pcd.ply")
 # output_dir = "../detected_edge/"
 
-def extract_edge(pcd1_path, output_dir, k_n = 50, thresh = 0.03):
+PCD_EDGE_FILENAME = 'pointcloud_edges.ply'
+EDGE_FILENAME = 'edges.ply'
+
+def extract_edge(pcd1_path, output_dir, uniformed=True, k_n = 50, thresh = 0.03):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
@@ -65,8 +68,14 @@ def extract_edge(pcd1_path, output_dir, k_n = 50, thresh = 0.03):
     # Save the edges and point cloud
     thresh_min = sigma_value < thresh
     sigma_value[thresh_min] = 0
-    thresh_max = sigma_value > thresh
-    sigma_value[thresh_max] = 255
+    if uniformed:
+        thresh_max = sigma_value > thresh
+        sigma_value[thresh_max] = 255
+    else:
+        min_val = sigma_value.min()
+        max_val = sigma_value.max()
+        normalized_arr = (sigma_value - min_val) / (max_val - min_val)
+        sigma_value = (normalized_arr * 255).astype(np.uint8)
 
     pcd_np[:,0] = x
     pcd_np[:,1] = y
@@ -86,8 +95,8 @@ def extract_edge(pcd1_path, output_dir, k_n = 50, thresh = 0.03):
     # pcd_points.plot()
     # edge_points.plot()
 
-    PyntCloud.to_file(pcd_points,output_dir+'pointcloud_edges.ply')   # Save the whole point cloud by painting the edge points
-    PyntCloud.to_file(edge_points,output_dir+'edges.ply')             # Save just the edge points
+    PyntCloud.to_file(pcd_points, output_dir + PCD_EDGE_FILENAME)   # Save the whole point cloud by painting the edge points
+    PyntCloud.to_file(edge_points, output_dir + EDGE_FILENAME)     # Save just the edge points
 
     # ply = PyntCloud.from_file(output_dir+'pointcloud_edges.ply')
     # ply.plot()
