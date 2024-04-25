@@ -184,7 +184,7 @@ if __name__ == '__main__':
     pcd_filepath = pcd_dir + "crop.ply"
     if not os.path.exists(pcd_dir):
         os.makedirs(pcd_dir)
-    seg.crop(largest_bbox_coordinates, contour, depth_image_path, intrinsic_path, camera_pose_filename, input_ply_path, pcd_filepath, front_vector, look_at_vector, up_vector)
+    seg.crop(largest_bbox_coordinates, contour, depth_image_path, intrinsic_path, camera_pose_filename, input_ply_path, pcd_filepath)
 
 
     # edge extraction

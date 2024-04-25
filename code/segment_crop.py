@@ -178,7 +178,8 @@ def camera_to_world(json_path, point):
 
     return [x_world, y_world, z_world]
 
-def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_path, input_ply_path, output_ply_path, front_vector, look_at_vector, up_vector):
+
+def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_path, input_ply_path, output_ply_path):
     pcd = o3d.io.read_point_cloud(input_ply_path)
 
     x, y, w, h = bbox_coordinates
