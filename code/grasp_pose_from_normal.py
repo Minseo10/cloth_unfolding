@@ -180,6 +180,50 @@ def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd 
     return best_point, normal
 
 
+# 적당히 뾰족한 애들 중 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
+def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
+                                        output_dir: Path = None, debug = False):
+    edge_points = np.asarray(edge_pcd.points)
+    edge_colors = np.asarray(edge_pcd.colors)
+
+    sharp_percent = 0.8
+    sharp_cutline = np.min(edge_colors[:, 0]) * sharp_percent + (1 - sharp_percent) * np.max(edge_colors[:, 0])
+    sharp_mask = edge_colors[:, 0] > sharp_cutline
+
+    edge_points = edge_points[sharp_mask]
+    sorted_indices = np.argsort(edge_points[:, 0])
+    sorted_points = edge_points[sorted_indices]
+
+    # x 값이 가장 작은 포인트 추출
+    x_count = 100
+    small_x_points = sorted_points[:x_count]
+
+    # 그 중 z 값이 가장 작은 포인트 추출
+    min_z_index = np.argmin(small_x_points[:, 2])
+    best_point = small_x_points[min_z_index]
+
+    # check min x point with blue color
+    point_colors = np.asarray(edge_pcd.colors)
+    point_colors[:] = [1, 0, 0]
+    colors = color_near_specific_point(edge_points, point_colors, best_point, [0, 0, 1], 0.01)
+    edge_pcd.colors = o3d.utility.Vector3dVector(colors)
+
+    if True:
+        o3d.visualization.draw_geometries([edge_pcd])
+
+    if output_dir:
+        o3d.io.write_point_cloud(str(output_dir / "ftn4.ply"), edge_pcd)
+
+    distances = np.linalg.norm(pcd.points - best_point, axis=1)
+    min_distance_index = np.argmin(distances)
+    normal = np.asarray(pcd.normals)[min_distance_index]
+
+    print("Best point: ", best_point)
+    print("Normal vector: ", normal)
+
+    return best_point, normal
+
+
 def color_near_specific_point(points, colors, point, color, tolerance):
     x_condition = (points[:, 0] >= point[0] - tolerance) & (points[:, 0] <= point[0] + tolerance)
     y_condition = (points[:, 1] >= point[1] - tolerance) & (points[:, 1] <= point[1] + tolerance)
@@ -269,7 +313,8 @@ if __name__ == '__main__':
     # edge extraction
     edge_pointcloud = de.extract_edge(
         pcd = sample.processing.cropped_point_cloud,
-        output_dir = processing_dir
+        output_dir = processing_dir,
+        uniformed = False,
     )  # from Difference_Eigenvalues.py
     sample.processing.edge_point_cloud = edge_pointcloud
 
@@ -290,6 +335,12 @@ if __name__ == '__main__':
         edge_pcd = sample.processing.edge_point_cloud,
         output_dir = processing_dir,
         debug = debug,
+    )
+    point, normal = find_best_point_and_normal_vector_4(
+        pcd=sample.processing.cropped_point_cloud,
+        edge_pcd=sample.processing.edge_point_cloud,
+        output_dir=processing_dir,
+        debug=debug,
     )
 
     # normal vector 옷 바깥쪽으로 뒤집기

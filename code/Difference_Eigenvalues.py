@@ -37,7 +37,7 @@ def convert_to_o3d_pcd(pcd: PyntCloud):
     return point_cloud
 
 
-def extract_edge(pcd: o3d.geometry.PointCloud, output_dir: Path, uniformed=True, k_n = 50, thresh = 0.03):
+def extract_edge(pcd: o3d.geometry.PointCloud, output_dir: Path, uniformed=False, k_n = 50, thresh = 0.03):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
