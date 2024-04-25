@@ -3,17 +3,31 @@ import numpy as np
 from airo_typing import (
     NumpyIntImageType,
     PointCloud,
+    HomogeneousMatrixType,
 )
+from airo_dataset_tools.data_parsers.pose import Pose
+
 import Difference_Eigenvalues as de
 import segment_crop as seg
-import json
 from pathlib import Path
+
 from cloth_tools.dataset.download import download_latest_observation
+from cloth_tools.dataset.bookkeeping import datetime_for_filename
 from cloth_tools.dataset.format import load_competition_observation, CompetitionObservation
+
 from dataclasses import dataclass
+
 import matplotlib.pyplot as plt
+
+import json
 import os
+import cv2
 import copy
+
+
+from cloth_tools.visualization.opencv import draw_pose
+from cloth_tools.dataset.upload import upload_grasp
+from cloth_tools.annotation.grasp_annotation import grasp_hanging_cloth_pose
 
 MIN = -4
 MAX = 4
@@ -184,14 +198,27 @@ def convert_to_o3d_pcd(pcd: PointCloud):
     return o3d_pcd
 
 
+def save_grasp_pose(grasps_dir: str, grasp_pose_fixed: HomogeneousMatrixType) -> str:
+    os.makedirs(grasps_dir, exist_ok=True)
+
+    grasp_pose_name = f"grasp_pose_{datetime_for_filename()}.json"
+    grasp_pose_file = os.path.join(grasps_dir, grasp_pose_name)
+
+    with open(grasp_pose_file, "w") as f:
+        grasp_pose_model = Pose.from_homogeneous_matrix(grasp_pose_fixed)
+        json.dump(grasp_pose_model.model_dump(exclude_none=False), f, indent=4)
+
+    return grasp_pose_file
+
+
 if __name__ == '__main__':
-    debug = False
+    debug = True
     from_server = False
+
+    server_url = "https://robotlab.ugent.be"
 
     # download input files
     if from_server:
-        server_url = "https://robotlab.ugent.be"
-
         data_dir = Path("../datasets")
         dataset_dir = data_dir / "downloaded_dataset_0000"
 
@@ -199,7 +226,7 @@ if __name__ == '__main__':
         sample_dir = Path(observation_dir + "/../")
 
     else:
-        sample_id = f"sample_{'{0:06d}'.format(0)}"
+        sample_id = f"sample_{'{0:06d}'.format(1)}"
         sample_dir = Path(f"../datasets/cloth_competition_dataset_0001/{sample_id}")
         observation_dir = sample_dir / "observation_start"
 
@@ -279,44 +306,74 @@ if __name__ == '__main__':
     grasp_x = np.cross(grasp_y, grasp_z)
     grasp_x /= np.linalg.norm(grasp_x)
 
-    # add grasp depth (0.5cm)
-    point = point + grasp_z * 0.005
-
-    # grasp pose w.r.t world frame
-    grasp_R = [[grasp_x[0], grasp_y[0], grasp_z[0]], [grasp_x[1], grasp_y[1], grasp_z[1]], [grasp_x[2], grasp_y[2], grasp_z[2]]]
-    T = np.eye(4)
-    T[:3, :3] = grasp_R
-    T[0, 3] = point[0]
-    T[1, 3] = point[1]
-    T[2, 3] = point[2]
-    mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
-    mesh.scale(0.1, center=(0,0,0))
-    mesh = copy.deepcopy(mesh).transform(T)
-
-    # print grasp pose
-    roll, pitch, yaw = rotation_matrix_to_rpy(grasp_R)
-
-    print("X (meters):", point[0])
-    print("Y (meters):", point[1])
-    print("Z (meters):", point[2])
-    print("Roll (radians):", roll)
-    print("Pitch (radians):", pitch)
-    print("Yaw (radians):", yaw)
-
-    if debug:
-        print("Roll (radians):", roll)
-        print("Pitch (radians):", pitch)
-        print("Yaw (radians):", yaw)
+    # # add grasp depth (0.5cm)
+    # point = point + grasp_z * 0.005
+    #
+    # # grasp pose w.r.t world frame
+    # grasp_R = [[grasp_x[0], grasp_y[0], grasp_z[0]], [grasp_x[1], grasp_y[1], grasp_z[1]], [grasp_x[2], grasp_y[2], grasp_z[2]]]
+    # T = np.eye(4)
+    # T[:3, :3] = grasp_R
+    # T[0, 3] = point[0]
+    # T[1, 3] = point[1]
+    # T[2, 3] = point[2]
+    # mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+    # mesh.scale(0.1, center=(0,0,0))
+    # mesh = copy.deepcopy(mesh).transform(T)
+    #
+    # # print grasp pose
+    # roll, pitch, yaw = rotation_matrix_to_rpy(grasp_R)
+    #
+    # print("X (meters):", point[0])
+    # print("Y (meters):", point[1])
+    # print("Z (meters):", point[2])
+    # print("Roll (radians):", roll)
+    # print("Pitch (radians):", pitch)
+    # print("Yaw (radians):", yaw)
+    #
+    # if debug:
+    #     print("Roll (radians):", roll)
+    #     print("Pitch (radians):", pitch)
+    #     print("Yaw (radians):", yaw)
 
     # visualize grasp pose at the grasp point
-    start_point = point.tolist()
-    end_point = (point + 0.1 * normal).tolist()
+    # start_point = point.tolist()
+    # end_point = (point + 0.1 * normal).tolist()
+    #
+    # line_set = o3d.geometry.LineSet(
+    #     points=o3d.utility.Vector3dVector([start_point, end_point]),
+    #     lines=o3d.utility.Vector2iVector([[0, 1]]),
+    # )
+    # line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]])
+    # line_set_line_width = 4
 
-    line_set = o3d.geometry.LineSet(
-        points=o3d.utility.Vector3dVector([start_point, end_point]),
-        lines=o3d.utility.Vector2iVector([[0, 1]]),
-    )
-    line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]])
-    line_set_line_width = 4
 
-    o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, line_set, mesh])
+
+    # upload to server
+    grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.5)
+
+    # open 3d visualize
+    if debug:
+        mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+        mesh.scale(0.1, center=(0,0,0))
+        mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
+        o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
+
+    X_W_C = sample.observation.camera_pose_in_world
+    intrinsics = sample.observation.camera_intrinsics
+
+    image_bgr = cv2.cvtColor(sample.observation.image_left, cv2.COLOR_RGB2BGR)
+    draw_pose(image_bgr, grasp_pose_fixed, intrinsics, X_W_C, 0.1)
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+    plt.figure(figsize=(10, 5))
+    plt.imshow(image_rgb)
+    plt.title("Example grasp pose")
+    plt.show()
+
+    grasps_dir = f"data/grasps_{sample_id}"
+
+    grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
+
+    # Example Usage
+    team_name = "test_team"
+    upload_grasp(grasp_pose_file, team_name, sample_id, server_url)
