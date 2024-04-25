@@ -179,6 +179,17 @@ def camera_to_world(json_path, point):
     return [x_world, y_world, z_world]
 
 
+# high: 커질수록 위쪽, width: 작아질수록 오른쪽
+def crop_condition(points, high, width):
+    z = high * np.max(points[:, 2]) + (1 - high) * np.min(points[:, 2])
+    y = width * np.max(points[:, 1]) + (1 - width) * np.min(points[:, 1])
+
+    y_condition = (points[:, 1] >= y)
+    z_condition = (points[:, 2] >= z)
+
+    return np.where(y_condition & z_condition)[0]
+
+
 def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_path, input_ply_path, output_ply_path):
     pcd = o3d.io.read_point_cloud(input_ply_path)
 
@@ -239,8 +250,35 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
     bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.3, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.3, max_coordinates[2]+0.5))
     cropped = pcd.crop(bbox)
 
-    # o3d.visualization.draw_geometries([cropped],
-    #                                   zoom=0.1,
+    exclude_robot = True
+    vis = False
+
+    if exclude_robot:
+        cropped_points = np.asarray(cropped_pcd.points)
+        cropped_colors = np.asarray(cropped_pcd.colors)
+
+        # cut 1: z 방향 상단 부분
+        robot_indicies_1 = crop_condition(cropped_points, 0.8, 0.3)
+        if vis:
+            cropped_colors[robot_indicies_1] = [1, 0, 0]
+            cropped_pcd.colors = o3d.utility.Vector3dVector(cropped_colors)
+
+        # cut 2: y 방향 좌단 부분
+        robot_indicies_2 = crop_condition(cropped_points, 0, 0.8)
+        if vis:
+            cropped_colors[robot_indicies_2] = [0, 0, 1]
+            cropped_pcd.colors = o3d.utility.Vector3dVector(cropped_colors)
+
+        # check if points are robots or not
+        if vis:
+            o3d.visualization.draw_geometries([cropped_pcd])
+
+        total_indices = np.union1d(robot_indicies_1, robot_indicies_2)
+        exclude_robot_points = np.delete(cropped_points, total_indices, axis=0)
+        exclude_robot_colors = np.delete(cropped_colors, total_indices, axis=0)
+
+        cropped_pcd.points = o3d.utility.Vector3dVector(exclude_robot_points)
+        cropped_pcd.colors = o3d.utility.Vector3dVector(exclude_robot_colors)
 
 
 if __name__ == '__main__':
