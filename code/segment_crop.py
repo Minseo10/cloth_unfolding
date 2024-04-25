@@ -248,7 +248,7 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
     print("Max Min bounds: \n", max_coordinates, "\n", min_coordinates)
 
     bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.3, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.3, max_coordinates[2]+0.5))
-    cropped = pcd.crop(bbox)
+    cropped_pcd = pcd.crop(bbox)
 
     exclude_robot = True
     vis = False
@@ -279,6 +279,9 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
 
         cropped_pcd.points = o3d.utility.Vector3dVector(exclude_robot_points)
         cropped_pcd.colors = o3d.utility.Vector3dVector(exclude_robot_colors)
+
+    o3d.visualization.draw_geometries([cropped_pcd])
+    o3d.io.write_point_cloud(output_ply_path, cropped_pcd)
 
 
 if __name__ == '__main__':
