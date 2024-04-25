@@ -88,17 +88,9 @@ def find_best_point_and_normal_vector_2(origin_pcd, edge_pcd, output_path):
 
     # check min x point with blue color
     point_colors = np.asarray(edge_pcd.colors)
-
-    # check min x point with blue color
-    tolerance = 0.01
-    x_condition = (edge_points[:, 0] >= best_point[0] - tolerance) & (edge_points[:, 0] <= best_point[0] + tolerance)
-    y_condition = (edge_points[:, 1] >= best_point[1] - tolerance) & (edge_points[:, 1] <= best_point[1] + tolerance)
-    z_condition = (edge_points[:, 2] >= best_point[2] - tolerance) & (edge_points[:, 2] <= best_point[2] + tolerance)
-    matching_indices = np.where(x_condition & y_condition & z_condition)[0]
-
     point_colors[:] = [1, 0, 0]
-    point_colors[matching_indices] = [0, 0, 1]
-    edge_pcd.colors = o3d.utility.Vector3dVector(point_colors)
+    colors = color_near_specific_point(edge_points, point_colors, best_point, [0, 0, 1], 0.01)
+    edge_pcd.colors = o3d.utility.Vector3dVector(colors)
     o3d.visualization.draw_geometries([edge_pcd])
 
     if output_path:
@@ -127,14 +119,8 @@ def find_best_point_and_normal_vector_3(origin_pcd, edge_pcd, output_path):
     best_point = edge_points[point_idx]
 
     # check min x point with blue color
-    tolerance = 0.01
-    x_condition = (edge_points[:, 0] >= best_point[0] - tolerance) & (edge_points[:, 0] <= best_point[0] + tolerance)
-    y_condition = (edge_points[:, 1] >= best_point[1] - tolerance) & (edge_points[:, 1] <= best_point[1] + tolerance)
-    z_condition = (edge_points[:, 2] >= best_point[2] - tolerance) & (edge_points[:, 2] <= best_point[2] + tolerance)
-    matching_indices = np.where(x_condition & y_condition & z_condition)[0]
-
     colors[:] = [1, 0, 0]
-    colors[matching_indices] = [0, 0, 1]
+    colors = color_near_specific_point(edge_points, colors, best_point, [0, 0, 1], 0.01)
     edge_pcd.colors = o3d.utility.Vector3dVector(colors)
     o3d.visualization.draw_geometries([edge_pcd])
 
@@ -149,6 +135,16 @@ def find_best_point_and_normal_vector_3(origin_pcd, edge_pcd, output_path):
     print("Normal vector: ", normal, "\n")
 
     return best_point, normal
+
+
+def color_near_specific_point(points, colors, point, color, tolerance):
+    x_condition = (points[:, 0] >= point[0] - tolerance) & (points[:, 0] <= point[0] + tolerance)
+    y_condition = (points[:, 1] >= point[1] - tolerance) & (points[:, 1] <= point[1] + tolerance)
+    z_condition = (points[:, 2] >= point[2] - tolerance) & (points[:, 2] <= point[2] + tolerance)
+    matching_indices = np.where(x_condition & y_condition & z_condition)[0]
+    colors[matching_indices] = color
+
+    return colors
 
 
 if __name__ == '__main__':
