@@ -6,6 +6,7 @@ import crop_pointcloud
 import segment_crop as seg
 import json
 import os
+import copy
 
 MIN = -4
 MAX = 4
@@ -208,24 +209,33 @@ if __name__ == '__main__':
     # grasp direction (vector) -> grasp pose (rpy)
     # Calculate world frame's z-axis in camera frame
     z_axis_world = np.array([0, 0, 1])
-    grasp_x = np.cross(z_axis_world, normal)
-    grasp_x /= np.linalg.norm(grasp_x)
-    grasp_x = (-1) * grasp_x
+    plane_normal = np.cross(z_axis_world, normal)
+    aligned_normal = np.cross(z_axis_world, plane_normal)
+    grasp_z = aligned_normal / np.linalg.norm(aligned_normal)
     grasp_y = z_axis_world
     grasp_y = (-1) * grasp_y
-    grasp_z = normal
-    grasp_z /= np.linalg.norm(normal)
-    grasp_z = (-1) * grasp_z
+    grasp_x = np.cross(grasp_y, grasp_z)
+    grasp_x /= np.linalg.norm(grasp_x)
 
-    # world frame에 대한 grasp pose
+    # add grasp depth (0.5cm)
+    point = point + grasp_z * 0.005
+
+    # grasp pose w.r.t world frame
     grasp_R = [[grasp_x[0], grasp_y[0], grasp_z[0]], [grasp_x[1], grasp_y[1], grasp_z[1]], [grasp_x[2], grasp_y[2], grasp_z[2]]]
+    T = np.eye(4)
+    T[:3, :3] = grasp_R
+    T[0, 3] = point[0]
+    T[1, 3] = point[1]
+    T[2, 3] = point[2]
     mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
-    # grasp_R = mesh.get_rotation_matrix_from_xyz((roll, pitch, yaw)) # grasp pose w.r.t world frame
-    mesh.rotate(grasp_R, center=(0, 0, 0)) # change to best point
-    # mesh.rotate([[1, 0, 0], [0,1,0], [0,0,1]], center=(0,0,0))
+    mesh.scale(0.1, center=(0,0,0))
+    mesh = copy.deepcopy(mesh).transform(T)
 
-    # roll pitch yaw
+    # print grasp pose
     roll, pitch, yaw = rotation_matrix_to_rpy(grasp_R)
+    print("X (meters):", point[0])
+    print("Y (meters):", point[1])
+    print("Z (meters):", point[2])
     print("Roll (radians):", roll)
     print("Pitch (radians):", pitch)
     print("Yaw (radians):", yaw)
