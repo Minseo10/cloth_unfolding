@@ -236,24 +236,11 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
     print("3D Bounding box points: \n", box_3d)
     print("Max Min bounds: \n", max_coordinates, "\n", min_coordinates)
 
-    # bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(-0.5, -0.3, -5), max_bound=(0.5, 0.2, 3))
     bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.3, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.3, max_coordinates[2]+0.5))
-    # bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(-0.5, -0.5, -3), max_bound=(0.5, 0.5, 0.9))
-    # bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min, min, min), max_bound=(max, 2, max))
     cropped = pcd.crop(bbox)
 
     # o3d.visualization.draw_geometries([cropped],
     #                                   zoom=0.1,
-    #                               front=front_vector,
-    #                               lookat=look_at_vector,
-    #                               up=up_vector,
-    #                               # width=2208,
-    #                               # height=1242,
-    #                               left=0,
-    #                               top=0,
-    #                               )
-
-    o3d.io.write_point_cloud(output_ply_path, cropped)
 
 
 if __name__ == '__main__':
