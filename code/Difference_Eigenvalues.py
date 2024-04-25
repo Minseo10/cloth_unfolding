@@ -1,45 +1,64 @@
-from pyntcloud import PyntCloud 
+from pathlib import Path
+from pyntcloud import PyntCloud
 import numpy as np
-from mpl_toolkits.mplot3d import Axes3D 
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 import pandas as pd
 import os
-import sys
-import pdb
 import open3d as o3d
-
-# pcd1 = PyntCloud.from_file("/home/minseo/cc_dataset/sample_000002/detected_edge/extracted_pcd.ply")
-# output_dir = "../detected_edge/"
 
 PCD_EDGE_FILENAME = 'pointcloud_edges.ply'
 EDGE_FILENAME = 'edges.ply'
 
-def extract_edge(pcd1_path, output_dir, uniformed=True, k_n = 50, thresh = 0.03):
+def convert_to_pyntcloud(pcd: o3d.geometry.PointCloud.PointCloud):
+    points_np = np.asarray(pcd.points)
+    colors_np = np.asarray(pcd.colors)
+
+    # pandas 데이터프레임 생성
+    df = pd.DataFrame(data=np.hstack([points_np, colors_np]), columns=['x', 'y', 'z', 'red', 'green', 'blue'])
+
+    # pyntcloud의 PyntCloud 객체 생성
+    pyntcloud_pc = PyntCloud(df)
+
+    return pyntcloud_pc
+
+def convert_to_o3d_pcd(pcd: PyntCloud):
+    points = pcd.points[['x', 'y', 'z']].values
+    colors = pcd.points[['red', 'green', 'blue']].values
+
+    # open3d PointCloud 객체 생성
+    point_cloud = o3d.geometry.PointCloud()
+
+    # points 설정
+    point_cloud.points = o3d.utility.Vector3dVector(points)
+
+    # colors 설정
+    point_cloud.colors = o3d.utility.Vector3dVector(colors)
+
+    return point_cloud
+
+
+def extract_edge(pcd: o3d.geometry.PointCloud, output_dir: Path, uniformed=True, k_n = 50, thresh = 0.03):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    pcd1 = PyntCloud.from_file(pcd1_path)
-    # define hyperparameters
-    # k_n = 50
-    # thresh = 0.03
+    pcd_np = np.zeros((len(pcd.points), 6))
 
-    pcd_np = np.zeros((len(pcd1.points), 6))
-
+    pcd = convert_to_pyntcloud(pcd)
     # find neighbors
-    kdtree_id = pcd1.add_structure("kdtree")
-    k_neighbors = pcd1.get_neighbors(k=k_n, kdtree=kdtree_id)
+    kdtree_id = pcd.add_structure("kdtree")
+    k_neighbors = pcd.get_neighbors(k=k_n, kdtree=kdtree_id)
 
     # calculate eigenvalues
-    ev = pcd1.add_scalar_field("eigen_values", k_neighbors=k_neighbors)
+    ev = pcd.add_scalar_field("eigen_values", k_neighbors=k_neighbors)
 
-    x = pcd1.points['x'].values
-    y = pcd1.points['y'].values
-    z = pcd1.points['z'].values
+    x = pcd.points['x'].values
+    y = pcd.points['y'].values
+    z = pcd.points['z'].values
 
-    e1 = pcd1.points['e3('+str(k_n+1)+')'].values
-    e2 = pcd1.points['e2('+str(k_n+1)+')'].values
-    e3 = pcd1.points['e1('+str(k_n+1)+')'].values
+    e1 = pcd.points['e3('+str(k_n+1)+')'].values
+    e2 = pcd.points['e2('+str(k_n+1)+')'].values
+    e3 = pcd.points['e1('+str(k_n+1)+')'].values
 
     sum_eg = np.add(np.add(e1,e2),e3)
     sigma = np.divide(e1,sum_eg)
@@ -95,8 +114,9 @@ def extract_edge(pcd1_path, output_dir, uniformed=True, k_n = 50, thresh = 0.03)
     # pcd_points.plot()
     # edge_points.plot()
 
-    PyntCloud.to_file(pcd_points, output_dir + PCD_EDGE_FILENAME)   # Save the whole point cloud by painting the edge points
-    PyntCloud.to_file(edge_points, output_dir + EDGE_FILENAME)     # Save just the edge points
+    PyntCloud.to_file(pcd_points, str(output_dir / PCD_EDGE_FILENAME))   # Save the whole point cloud by painting the edge points
+    PyntCloud.to_file(edge_points, str(output_dir / EDGE_FILENAME))     # Save just the edge points
 
+    return convert_to_o3d_pcd(edge_points)
     # ply = PyntCloud.from_file(output_dir+'pointcloud_edges.ply')
     # ply.plot()
