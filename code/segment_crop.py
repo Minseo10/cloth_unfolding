@@ -3,28 +3,33 @@ import cv2
 import torch
 import albumentations as albu
 import os
-from PIL import Image
-import sys
-from iglovikov_helper_functions.utils.image_utils import load_rgb, pad, unpad
-from iglovikov_helper_functions.dl.pytorch.utils import tensor_from_rgb_image
 import pyrealsense2 as rs
 import open3d as o3d
 import json
-import cal_camera_vec
-sys.path.append("/home/minseo/robot_ws/src")
 
+from PIL import Image
+from iglovikov_helper_functions.utils.image_utils import load_rgb, pad, unpad
+from iglovikov_helper_functions.dl.pytorch.utils import tensor_from_rgb_image
 from cloths_segmentation.cloths_segmentation.pre_trained_models import create_model
+from pathlib import Path
+from airo_typing import (
+    CameraExtrinsicMatrixType,
+    CameraIntrinsicsMatrixType,
+    NumpyIntImageType,
+    PointCloud,
+)
+
+from grasp_pose_from_normal import convert_to_o3d_pcd
 
 
-def segmentation(root_dir):
+def segmentation(image: NumpyIntImageType, output_dir: Path):
     model = create_model("Unet_2020-10-30")
     model.eval()
-    input_image_path = root_dir + "observation_start/image_left.png"
-    output_dir = root_dir + "detected_edge"
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
-    output_image_path = output_dir + f"/segmentation.png"
-    image = load_rgb(input_image_path)
+
+    output_image_path = output_dir / "segmentation.png"
 
     transform = albu.Compose([albu.Normalize(p=1)], p=1)
     padded_image, pads = pad(image, factor=32, border=cv2.BORDER_CONSTANT)
@@ -37,22 +42,6 @@ def segmentation(root_dir):
 
     mask = (prediction > 0).cpu().numpy().astype(np.uint8)
     mask = unpad(mask, pads)
-    mask_path = output_dir + f"/mask.npy"
-    np.save(mask_path, mask)  # save mask npy file
-
-    # imshow(mask)
-    # rgb_image = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)
-    #
-    # for i in range(mask.shape[0]):
-    #     for j in range(mask.shape[1]):
-    #         if mask[i, j] == 1:
-    #             rgb_image[i, j] = [255, 255, 0]
-    #         else:
-    #             rgb_image[i, j] = [128, 0, 128]
-
-    # rgb_image = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)
-    # rgb_image[mask == 1] = [255, 255, 0]
-    # rgb_image[mask != 1] = [128, 0, 128]
 
     rgb_image = np.full((mask.shape[0], mask.shape[1], 3), [128, 0, 128], dtype=np.uint8)
     rgb_image[mask == 1] = [255, 255, 0]
@@ -60,14 +49,16 @@ def segmentation(root_dir):
     pil_image = Image.fromarray(rgb_image)
     pil_image.save(output_image_path)
 
-    return mask, output_dir
+    return mask
 
-def contour(mask, output_dir):
-    image_array = np.load(output_dir + f"/mask.npy")
 
-    mask = (mask * 255).astype(np.uint8)
+def contour(binary_image: NumpyIntImageType, output_dir: Path, debug: bool = False):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
 
-    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    image = (binary_image * 255).astype(np.uint8)
+
+    contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     bounding_box_area = [cv2.contourArea(contour) for contour in contours]
     bounding_boxes = [cv2.boundingRect(contour) for contour in contours]
@@ -75,20 +66,21 @@ def contour(mask, output_dir):
     max_area_index = np.argmax(bounding_box_area)
     largest_bbox_coordinates = bounding_boxes[max_area_index]
 
-    print("Bounding boxes:", bounding_box_area)
-    print("Bounding boxes:", bounding_boxes)
-    print("largest_bbox_coordinates:", largest_bbox_coordinates)
+    if debug:
+        print("Bounding boxes:", bounding_box_area)
+        print("Bounding boxes:", bounding_boxes)
+        print("largest_bbox_coordinates:", largest_bbox_coordinates)
 
-    image_with_bbox = cv2.cvtColor(mask, cv2.COLOR_GRAY2BGR)
+    image_with_bbox = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
     x, y, w, h = largest_bbox_coordinates
     cv2.rectangle(image_with_bbox, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
-    cv2.imwrite(output_dir + f"/original_with_bbox.jpg", image_with_bbox)
+    cv2.imwrite(str(output_dir / "original_with_bbox.jpg.jpg"), image_with_bbox)
 
-    return largest_bbox_coordinates, contours[max_area_index]
+    return largest_bbox_coordinates
 
 
-def crop_pointcloud(bbox_coordinates, contour, depth_image_path, intrinsic_path, input_ply_path, output_ply_path):
+def crop_pointcloud(bbox_coordinates, depth_image_path, intrinsic_path, input_ply_path, output_ply_path):
     x, y, w, h = bbox_coordinates
     points = [[x, y], [x+w, y], [x, y+h], [x+w, y+h]]
 
@@ -139,25 +131,13 @@ def crop_pointcloud(bbox_coordinates, contour, depth_image_path, intrinsic_path,
     cropped = pcd.crop(box)
     o3d.io.write_point_cloud(output_ply_path, cropped)
 
-def camera_to_world(json_path, point):
-    with open(json_path, 'r') as f:
-        data = json.load(f)
+def camera_to_world(camera_extrinsics:CameraExtrinsicMatrixType, point):
+    extrinsics_array = np.asarray(camera_extrinsics)
 
-    x = data["position_in_meters"]["x"]
-    y = data["position_in_meters"]["y"]
-    z = data["position_in_meters"]["z"]
+    x = extrinsics_array[0][3]
+    y = extrinsics_array[1][3]
+    z = extrinsics_array[2][3]
 
-    # Grasp direction
-    roll, pitch, yaw = data["rotation_euler_xyz_in_radians"]["roll"], data["rotation_euler_xyz_in_radians"]["pitch"], data["rotation_euler_xyz_in_radians"]["yaw"]
-
-    # Convert Euler angles to rotation matrix
-    R = np.array([
-        [np.cos(yaw) * np.cos(pitch), np.cos(yaw) * np.sin(pitch) * np.sin(roll) - np.sin(yaw) * np.cos(roll),
-         np.cos(yaw) * np.sin(pitch) * np.cos(roll) + np.sin(yaw) * np.sin(roll)],
-        [np.sin(yaw) * np.cos(pitch), np.sin(yaw) * np.sin(pitch) * np.sin(roll) + np.cos(yaw) * np.cos(roll),
-         np.sin(yaw) * np.sin(pitch) * np.cos(roll) - np.cos(yaw) * np.sin(roll)],
-        [-np.sin(pitch), np.cos(pitch) * np.sin(roll), np.cos(pitch) * np.cos(roll)]
-    ])
     # Create translation matrix
     p = np.array([
         [1, 0, 0, x],
@@ -167,7 +147,7 @@ def camera_to_world(json_path, point):
     ])
 
     # Combine rotation and translation to get transformation matrix
-    # np.vstack([ np.hstack([R, np.zeros((3, 1))]), [0, 0, 0, 1] ])
+    R = extrinsics_array[0:3, 0:3]
     T = np.dot(p, np.vstack([ np.hstack([R, np.zeros((3, 1))]), [0, 0, 0, 1] ]))
 
     point_camera_frame = np.array([point[0], point[1], point[2], 1])  # Homogeneous coordinates
@@ -190,28 +170,33 @@ def crop_condition(points, high, width):
     return np.where(y_condition & z_condition)[0]
 
 
-def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_path, input_ply_path, output_ply_path):
-    pcd = o3d.io.read_point_cloud(input_ply_path)
+def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
+         camera_intrinsics: CameraIntrinsicsMatrixType,
+         camera_extrinsic: CameraExtrinsicMatrixType,
+         point_cloud: PointCloud, output_dir: Path, debug = False):
+
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    output_pcd_path = output_dir / "crop.ply"
 
     x, y, w, h = bbox_coordinates
-    # box_points = [[x, y], [x + w, y], [x, y + h], [x + w, y + h]]
     center = [x + w/2, y + h/2]
     box_points = [[x + w/2, y + h/2]]
 
-    depth_image_head = Image.open(depth_image_path).convert("L")
+    depth_image_head = Image.fromarray(depth_image).convert("L")
     depth_array = np.array(depth_image_head) / 255.
-    image_width, image_height = depth_image_head.size
-
-    with open(intrinsic_path, 'r') as f:
-        data = json.load(f)
 
     intrinsics = rs.intrinsics()
-    intrinsics.width = data["image_resolution"]["width"]
-    intrinsics.height = data["image_resolution"]["height"]
-    intrinsics.ppx = data["principal_point_in_pixels"]["cx"]
-    intrinsics.ppy = data["principal_point_in_pixels"]["cy"]
-    intrinsics.fx = data["focal_lengths_in_pixels"]["fx"]
-    intrinsics.fy = data["focal_lengths_in_pixels"]["fy"]
+
+    intrinsics.width = depth_image.shape[1]
+    intrinsics.height = depth_image.shape[0]
+
+    intrinsic_array = np.asarray(camera_intrinsics)
+    intrinsics.ppx = intrinsic_array[0][2]
+    intrinsics.ppy = intrinsic_array[1][2]
+    intrinsics.fx = intrinsic_array[0][0]
+    intrinsics.fy = intrinsic_array[1][1]
     intrinsics.model = rs.distortion.brown_conrady
 
     box_points_world = []
@@ -219,6 +204,7 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
         point_3d = rs.rs2_deproject_pixel_to_point(intrinsics, [int(point[0]), int(point[1])],
                                                       depth_array[int(center[0]), int(center[1])])
         box_points_world.append(point_3d)
+
 
     box_3d = []
     max_coordinates = [-100, -100, -100]
@@ -228,8 +214,8 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
         new_point_2 = [point[0], point[1], point[2]]
 
         # camera -> world frame
-        new_point_1 = camera_to_world(extrinsic_path, new_point_1)
-        new_point_2 = camera_to_world(extrinsic_path, new_point_2)
+        new_point_1 = camera_to_world(camera_extrinsic, new_point_1)
+        new_point_2 = camera_to_world(camera_extrinsic, new_point_2)
 
         box_3d.append(new_point_1)
         box_3d.append(new_point_2)
@@ -244,14 +230,14 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
             if new_point_2[i] < min_coordinates[i]:
                 min_coordinates[i] = new_point_2[i]
 
-    print("3D Bounding box points: \n", box_3d)
-    print("Max Min bounds: \n", max_coordinates, "\n", min_coordinates)
+    if debug:
+        print("3D Bounding box points: \n", box_3d)
+        print("Max Min bounds: \n", max_coordinates, "\n", min_coordinates)
 
     bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.3, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.3, max_coordinates[2]+0.5))
-    cropped_pcd = pcd.crop(bbox)
+    cropped_pcd = convert_to_o3d_pcd(point_cloud).crop(bbox)
 
     exclude_robot = True
-    vis = False
 
     if exclude_robot:
         cropped_points = np.asarray(cropped_pcd.points)
@@ -259,18 +245,16 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
 
         # cut 1: z 방향 상단 부분
         robot_indicies_1 = crop_condition(cropped_points, 0.8, 0.3)
-        if vis:
+        if debug:
             cropped_colors[robot_indicies_1] = [1, 0, 0]
             cropped_pcd.colors = o3d.utility.Vector3dVector(cropped_colors)
+            o3d.visualization.draw_geometries([cropped_pcd])
 
         # cut 2: y 방향 좌단 부분
         robot_indicies_2 = crop_condition(cropped_points, 0, 0.8)
-        if vis:
+        if debug:
             cropped_colors[robot_indicies_2] = [0, 0, 1]
             cropped_pcd.colors = o3d.utility.Vector3dVector(cropped_colors)
-
-        # check if points are robots or not
-        if vis:
             o3d.visualization.draw_geometries([cropped_pcd])
 
         total_indices = np.union1d(robot_indicies_1, robot_indicies_2)
@@ -280,36 +264,38 @@ def crop(bbox_coordinates, contour, depth_image_path, intrinsic_path, extrinsic_
         cropped_pcd.points = o3d.utility.Vector3dVector(exclude_robot_points)
         cropped_pcd.colors = o3d.utility.Vector3dVector(exclude_robot_colors)
 
-    o3d.visualization.draw_geometries([cropped_pcd])
-    o3d.io.write_point_cloud(output_ply_path, cropped_pcd)
+    if debug:
+        o3d.visualization.draw_geometries([cropped_pcd])
+    o3d.io.write_point_cloud(str(output_pcd_path), cropped_pcd)
 
+    return cropped_pcd
 
-if __name__ == '__main__':
-    # model = create_model("Unet_2020-10-30")
-    # model.eval()
-    #
-    # for i in range(377):
-    # # for i in [1]:
-    #     print(f"{i}/377")
-    #     # root_dir = f"./cloth_competition_dataset_0000/sample_{'{0:06d}'.format(i)}/"
-    #     root_dir = f"./cloth_competition_dataset_0001/sample_{'{0:06d}'.format(i)}/"
-    #     input_img_path = root_dir + "observation_start/image_left.png"
-    #     output_dir = root_dir + "detected_edge"
-    #     output_img_path = output_dir + f"/segmentation_{'{0:06d}'.format(i)}.png"
-    #     if not os.path.exists(output_dir):
-    #         os.makedirs(output_dir)
-    #     segmentation(model, input_img_path, output_img_path)
-    root_path = "/home/minseo/cloth_competition_dataset_0001/sample_000100/"
-    depth_image_path = root_path + f"observation_start/depth_image.jpg"
-    intrinsic_path = root_path + f"observation_start/camera_intrinsics.json"
-
-    mask, output_dir = segmentation(root_path)
-    input_ply_path = root_path + f"observation_start/point_cloud.ply"
-    output_ply_path = output_dir + "/crop.ply"
-
-    largest_bbox_coordinates, contour = contour(mask, output_dir)
-    camera_pose_filename = root_path + "observation_start/camera_pose_in_world.json"
-    front_vector, look_at_vector, up_vector = cal_camera_vec.cal_camera_vec_from_json(camera_pose_filename)
-    look_at_vector[0] += 2
-    crop(largest_bbox_coordinates, contour, depth_image_path, intrinsic_path,camera_pose_filename, input_ply_path, output_ply_path, front_vector, look_at_vector, up_vector)
-
+# if __name__ == '__main__':
+#     # model = create_model("Unet_2020-10-30")
+#     # model.eval()
+#     #
+#     # for i in range(377):
+#     # # for i in [1]:
+#     #     print(f"{i}/377")
+#     #     # root_dir = f"./cloth_competition_dataset_0000/sample_{'{0:06d}'.format(i)}/"
+#     #     root_dir = f"./cloth_competition_dataset_0001/sample_{'{0:06d}'.format(i)}/"
+#     #     input_img_path = root_dir + "observation_start/image_left.png"
+#     #     output_dir = root_dir + "detected_edge"
+#     #     output_img_path = output_dir + f"/segmentation_{'{0:06d}'.format(i)}.png"
+#     #     if not os.path.exists(output_dir):
+#     #         os.makedirs(output_dir)
+#     #     segmentation(model, input_img_path, output_img_path)
+#     root_path = "/home/minseo/cloth_competition_dataset_0001/sample_000100/"
+#     depth_image_path = root_path + f"observation_start/depth_image.jpg"
+#     intrinsic_path = root_path + f"observation_start/camera_intrinsics.json"
+#
+#     mask, output_dir = segmentation(root_path)
+#     input_ply_path = root_path + f"observation_start/point_cloud.ply"
+#     output_ply_path = output_dir + "/crop.ply"
+#
+#     largest_bbox_coordinates, contour = contour(mask, output_dir)
+#     camera_pose_filename = root_path + "observation_start/camera_pose_in_world.json"
+#     front_vector, look_at_vector, up_vector = cal_camera_vec.cal_camera_vec_from_json(camera_pose_filename)
+#     look_at_vector[0] += 2
+#     crop(largest_bbox_coordinates, contour, depth_image_path, intrinsic_path,camera_pose_filename, input_ply_path, output_ply_path, front_vector, look_at_vector, up_vector)
+#

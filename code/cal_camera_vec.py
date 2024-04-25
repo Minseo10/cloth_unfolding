@@ -1,6 +1,8 @@
 import numpy as np
 import json
 
+from airo_typing import CameraExtrinsicMatrixType
+
 def load_json(filename):
     with open(filename, 'r') as f:
         data = json.load(f)
@@ -55,34 +57,34 @@ def cal_camera_vec_from_json(json_path):
     return front_vector, look_at_vector, up_vector
 
 
-def cal_camera_vec(position_in_meters, rotation_euler_xyz_in_radians):
-    # 회전 행렬 생성
-    R = euler_to_rotation_matrix(rotation_euler_xyz_in_radians["roll"],
-                                 rotation_euler_xyz_in_radians["pitch"],
-                                 rotation_euler_xyz_in_radians["yaw"])
-
-    # 카메라 방향 벡터 계산
-    front_vector = np.dot(R, np.array([0, 0, -1]))
-
-    # 업 벡터 계산
-    up_vector = np.dot(R, np.array([0, -1, 0]))
-
-    look_at_vector = np.array([position_in_meters["x"], position_in_meters["y"], position_in_meters["z"]]) + front_vector
-    # norm = np.linalg.norm(look_at_vector)
-    # look_at_vector /= norm
-
-    # # 카메라 위치와 바라보는 점
-    # camera_position = np.array([position_in_meters["x"], position_in_meters["y"], position_in_meters["z"]])
-    # look_at_point = camera_position + front_vector  # 카메라의 위치에서 바라보는 방향으로 떨어진 점
-    #
-    # # look-at 벡터 계산
-    # look_at_vector = look_at_point - camera_position
-    # look_at_vector /= np.linalg.norm(look_at_vector)  # 벡터 정규화
-
-    # 결과 출력
-    print("Look-at vector:", look_at_vector)
-    print("Front vector:", front_vector)
-    print("Up vector:", up_vector)
-
-    return front_vector, look_at_vector, up_vector
+# def cal_camera_vec(camera_pose_in_world: CameraExtrinsicMatrixType):
+#     # 회전 행렬 생성
+#     R = euler_to_rotation_matrix(rotation_euler_xyz_in_radians["roll"],
+#                                  rotation_euler_xyz_in_radians["pitch"],
+#                                  rotation_euler_xyz_in_radians["yaw"])
+#
+#     # 카메라 방향 벡터 계산
+#     front_vector = np.dot(R, np.array([0, 0, -1]))
+#
+#     # 업 벡터 계산
+#     up_vector = np.dot(R, np.array([0, -1, 0]))
+#
+#     look_at_vector = np.array([position_in_meters["x"], position_in_meters["y"], position_in_meters["z"]]) + front_vector
+#     # norm = np.linalg.norm(look_at_vector)
+#     # look_at_vector /= norm
+#
+#     # # 카메라 위치와 바라보는 점
+#     # camera_position = np.array([position_in_meters["x"], position_in_meters["y"], position_in_meters["z"]])
+#     # look_at_point = camera_position + front_vector  # 카메라의 위치에서 바라보는 방향으로 떨어진 점
+#     #
+#     # # look-at 벡터 계산
+#     # look_at_vector = look_at_point - camera_position
+#     # look_at_vector /= np.linalg.norm(look_at_vector)  # 벡터 정규화
+#
+#     # 결과 출력
+#     print("Look-at vector:", look_at_vector)
+#     print("Front vector:", front_vector)
+#     print("Up vector:", up_vector)
+#
+#     return front_vector, look_at_vector, up_vector
 
