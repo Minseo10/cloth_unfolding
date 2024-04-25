@@ -168,7 +168,7 @@ def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd 
         o3d.visualization.draw_geometries([edge_pcd])
 
     if output_dir:
-        o3d.io.write_point_cloud(str(output_dir / "ftn2.ply"), edge_pcd)
+        o3d.io.write_point_cloud(str(output_dir / "ftn3.ply"), edge_pcd)
 
     distances = np.linalg.norm(pcd.points - best_point, axis=1)
     min_distance_index = np.argmin(distances)
