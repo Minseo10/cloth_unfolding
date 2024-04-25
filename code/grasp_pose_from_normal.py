@@ -145,7 +145,7 @@ def find_best_point_and_normal_vector_3(origin_pcd, edge_pcd, output_path):
     min_distance_index = np.argmin(distances)
     normal = np.asarray(origin_pcd.normals)[min_distance_index]
 
-    print("Best point: ", point, "\n")
+    print("Best point: ", best_point, "\n")
     print("Normal vector: ", normal, "\n")
 
     return best_point, normal
