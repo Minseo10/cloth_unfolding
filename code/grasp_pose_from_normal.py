@@ -349,7 +349,7 @@ if __name__ == '__main__':
 
 
     # upload to server
-    grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.5)
+    grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.005)
 
     # open 3d visualize
     if debug:
