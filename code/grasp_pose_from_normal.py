@@ -258,6 +258,7 @@ def save_grasp_pose(grasps_dir: str, grasp_pose_fixed: HomogeneousMatrixType) ->
 if __name__ == '__main__':
     debug = True
     from_server = False
+    to_server = False
 
     server_url = "https://robotlab.ugent.be"
 
@@ -422,9 +423,7 @@ if __name__ == '__main__':
     plt.show()
 
     grasps_dir = f"data/grasps_{sample_id}"
-
     grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
 
-    # Example Usage
-    team_name = "test_team"
-    upload_grasp(grasp_pose_file, team_name, sample_id, server_url)
+    if to_server:
+        upload_grasp(grasp_pose_file, "Ewha Glab", sample_id, server_url)
