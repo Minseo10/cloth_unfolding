@@ -111,8 +111,9 @@ def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
     point = points_array[best_point_idx]
     normal = normals_array[best_point_idx]
 
-    print("Best point: ", point, "\n")
-    print("Normal vector: ", normal, "\n")
+    if debug:
+        print("Best point: ", point, "\n")
+        print("Normal vector: ", normal, "\n")
 
     return point, normal
 
@@ -140,8 +141,9 @@ def find_best_point_and_normal_vector_2(pcd : o3d.geometry.PointCloud, edge_pcd 
     min_distance_index = np.argmin(distances)
     normal = np.asarray(pcd.normals)[min_distance_index]
 
-    print("Best point: ", best_point)
-    print("Normal vector: ", normal)
+    if debug:
+        print("Best point: ", point, "\n")
+        print("Normal vector: ", normal, "\n")
 
     return best_point, normal
 
@@ -174,8 +176,9 @@ def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd 
     min_distance_index = np.argmin(distances)
     normal = np.asarray(pcd.normals)[min_distance_index]
 
-    print("Best point: ", best_point)
-    print("Normal vector: ", normal)
+    if debug:
+        print("Best point: ", point, "\n")
+        print("Normal vector: ", normal, "\n")
 
     return best_point, normal
 
@@ -218,8 +221,9 @@ def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd 
     min_distance_index = np.argmin(distances)
     normal = np.asarray(pcd.normals)[min_distance_index]
 
-    print("Best point: ", best_point)
-    print("Normal vector: ", normal)
+    if debug:
+        print("Best point: ", point, "\n")
+        print("Normal vector: ", normal, "\n")
 
     return best_point, normal
 
