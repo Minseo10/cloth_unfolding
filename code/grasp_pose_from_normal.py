@@ -23,6 +23,7 @@ import json
 import os
 import cv2
 import copy
+import time
 
 
 from cloth_tools.visualization.opencv import draw_pose
@@ -142,7 +143,7 @@ def find_best_point_and_normal_vector_2(pcd : o3d.geometry.PointCloud, edge_pcd 
     normal = np.asarray(pcd.normals)[min_distance_index]
 
     if debug:
-        print("Best point: ", point, "\n")
+        print("Best point: ", best_point, "\n")
         print("Normal vector: ", normal, "\n")
 
     return best_point, normal
@@ -177,7 +178,7 @@ def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd 
     normal = np.asarray(pcd.normals)[min_distance_index]
 
     if debug:
-        print("Best point: ", point, "\n")
+        print("Best point: ", best_point, "\n")
         print("Normal vector: ", normal, "\n")
 
     return best_point, normal
@@ -222,7 +223,7 @@ def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd 
     normal = np.asarray(pcd.normals)[min_distance_index]
 
     if debug:
-        print("Best point: ", point, "\n")
+        print("Best point: ", best_point, "\n")
         print("Normal vector: ", normal, "\n")
 
     return best_point, normal
@@ -279,6 +280,8 @@ if __name__ == '__main__':
         sample_dir = Path(f"../datasets/cloth_competition_dataset_0001/{sample_id}")
         observation_dir = sample_dir / "observation_start"
 
+    start_time = time.time()
+
     sample = Sample(
         observation=load_competition_observation(observation_dir),
         processing=ProcessingData(
@@ -328,6 +331,9 @@ if __name__ == '__main__':
         search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
     )
 
+    # normal vector 옷 바깥쪽으로 뒤집기
+    sample.processing.cropped_point_cloud.orient_normals_consistent_tangent_plane(k=15)
+
     # find corresponding point in point cloud
     point, normal = find_best_point_and_normal_vector_2(
         pcd = sample.processing.cropped_point_cloud,
@@ -347,9 +353,6 @@ if __name__ == '__main__':
         output_dir=processing_dir,
         debug=debug,
     )
-
-    # normal vector 옷 바깥쪽으로 뒤집기
-    sample.processing.cropped_point_cloud.orient_normals_consistent_tangent_plane(k=15)
 
     # grasp direction (vector) -> grasp pose (rpy)
     # Calculate world frame's z-axis in camera frame
@@ -431,4 +434,8 @@ if __name__ == '__main__':
     grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
 
     if to_server:
-        upload_grasp(grasp_pose_file, "Ewha Glab", sample_id, server_url)
+        upload_grasp(grasp_pose_file, "test", sample_id, server_url)
+
+    end_time = time.time()
+    execution_time = end_time - start_time
+    print(f"코드 실행 시간: {execution_time:.6f}초")
