@@ -170,6 +170,9 @@ def crop_condition(points, high, width):
     return np.where(y_condition & z_condition)[0]
 
 
+# 1. crop with segmented bbox
+# 2. crop robot arm
+# 3. remove outlier
 def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
          camera_intrinsics: CameraIntrinsicsMatrixType,
          camera_extrinsic: CameraExtrinsicMatrixType,
@@ -178,97 +181,140 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    output_pcd_path = output_dir / "crop.ply"
+    def crop_with_bbox(pcd: o3d.geometry.PointCloud)-> o3d.geometry.PointCloud:
+        x, y, w, h = bbox_coordinates
+        center = [x + w/2, y + h/2]
+        box_points = [[x + w/2, y + h/2]]
 
-    x, y, w, h = bbox_coordinates
-    center = [x + w/2, y + h/2]
-    box_points = [[x + w/2, y + h/2]]
+        depth_image_head = Image.fromarray(depth_image).convert("L")
+        depth_array = np.array(depth_image_head) / 255.
 
-    depth_image_head = Image.fromarray(depth_image).convert("L")
-    depth_array = np.array(depth_image_head) / 255.
+        intrinsics = rs.intrinsics()
 
-    intrinsics = rs.intrinsics()
+        intrinsics.width = depth_image.shape[1]
+        intrinsics.height = depth_image.shape[0]
 
-    intrinsics.width = depth_image.shape[1]
-    intrinsics.height = depth_image.shape[0]
+        intrinsic_array = np.asarray(camera_intrinsics)
+        intrinsics.ppx = intrinsic_array[0][2]
+        intrinsics.ppy = intrinsic_array[1][2]
+        intrinsics.fx = intrinsic_array[0][0]
+        intrinsics.fy = intrinsic_array[1][1]
+        intrinsics.model = rs.distortion.brown_conrady
 
-    intrinsic_array = np.asarray(camera_intrinsics)
-    intrinsics.ppx = intrinsic_array[0][2]
-    intrinsics.ppy = intrinsic_array[1][2]
-    intrinsics.fx = intrinsic_array[0][0]
-    intrinsics.fy = intrinsic_array[1][1]
-    intrinsics.model = rs.distortion.brown_conrady
+        box_points_world = []
+        for point in box_points:
+            point_3d = rs.rs2_deproject_pixel_to_point(intrinsics, [int(point[0]), int(point[1])],
+                                                          depth_array[int(center[0]), int(center[1])])
+            box_points_world.append(point_3d)
 
-    box_points_world = []
-    for point in box_points:
-        point_3d = rs.rs2_deproject_pixel_to_point(intrinsics, [int(point[0]), int(point[1])],
-                                                      depth_array[int(center[0]), int(center[1])])
-        box_points_world.append(point_3d)
+        box_3d = []
+        max_coordinates = [-100, -100, -100]
+        min_coordinates = [100, 100, 100]
+        for point in box_points_world:
+            new_point_1 = [point[0], point[1], point[2]]
+            new_point_2 = [point[0], point[1], point[2]]
+
+            # camera -> world frame
+            new_point_1 = camera_to_world(camera_extrinsic, new_point_1)
+            new_point_2 = camera_to_world(camera_extrinsic, new_point_2)
+
+            box_3d.append(new_point_1)
+            box_3d.append(new_point_2)
+
+            for i in range(3):
+                if new_point_1[i] > max_coordinates[i]:
+                    max_coordinates[i] = new_point_1[i]
+                if new_point_1[i] < min_coordinates[i]:
+                    min_coordinates[i] = new_point_1[i]
+                if new_point_2[i] > max_coordinates[i]:
+                    max_coordinates[i] = new_point_2[i]
+                if new_point_2[i] < min_coordinates[i]:
+                    min_coordinates[i] = new_point_2[i]
+
+        if debug:
+            print("3D Bounding box points: \n", box_3d)
+            print("Max Min bounds: \n", max_coordinates, "\n", min_coordinates)
+
+        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.3, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.3, max_coordinates[2]+0.5))
+        cropped_pcd = pcd.crop(bbox)
+
+        return cropped_pcd
 
 
-    box_3d = []
-    max_coordinates = [-100, -100, -100]
-    min_coordinates = [100, 100, 100]
-    for point in box_points_world:
-        new_point_1 = [point[0], point[1], point[2]]
-        new_point_2 = [point[0], point[1], point[2]]
-
-        # camera -> world frame
-        new_point_1 = camera_to_world(camera_extrinsic, new_point_1)
-        new_point_2 = camera_to_world(camera_extrinsic, new_point_2)
-
-        box_3d.append(new_point_1)
-        box_3d.append(new_point_2)
-
-        for i in range(3):
-            if new_point_1[i] > max_coordinates[i]:
-                max_coordinates[i] = new_point_1[i]
-            if new_point_1[i] < min_coordinates[i]:
-                min_coordinates[i] = new_point_1[i]
-            if new_point_2[i] > max_coordinates[i]:
-                max_coordinates[i] = new_point_2[i]
-            if new_point_2[i] < min_coordinates[i]:
-                min_coordinates[i] = new_point_2[i]
-
-    if debug:
-        print("3D Bounding box points: \n", box_3d)
-        print("Max Min bounds: \n", max_coordinates, "\n", min_coordinates)
-
-    bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.3, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.3, max_coordinates[2]+0.5))
-    cropped_pcd = convert_to_o3d_pcd(point_cloud).crop(bbox)
-
-    exclude_robot = True
-
-    if exclude_robot:
-        cropped_points = np.asarray(cropped_pcd.points)
-        cropped_colors = np.asarray(cropped_pcd.colors)
+    def crop_robot_arm(pcd: o3d.geometry.PointCloud) -> o3d.geometry.PointCloud:
+        points = np.asarray(pcd.points)
+        colors = np.asarray(pcd.colors)
 
         # cut 1: z 방향 상단 부분
-        robot_indicies_1 = crop_condition(cropped_points, 0.8, 0.3)
+        robot_indicies_1 = crop_condition(points, 0.8, 0.3)
         if debug:
-            cropped_colors[robot_indicies_1] = [1, 0, 0]
-            cropped_pcd.colors = o3d.utility.Vector3dVector(cropped_colors)
-            o3d.visualization.draw_geometries([cropped_pcd])
+            colors[robot_indicies_1] = [1, 0, 0]
+            pcd.colors = o3d.utility.Vector3dVector(colors)
+            o3d.visualization.draw_geometries([pcd])
 
         # cut 2: y 방향 좌단 부분
-        robot_indicies_2 = crop_condition(cropped_points, 0, 0.8)
+        robot_indicies_2 = crop_condition(points, 0, 0.8)
         if debug:
-            cropped_colors[robot_indicies_2] = [0, 0, 1]
-            cropped_pcd.colors = o3d.utility.Vector3dVector(cropped_colors)
-            o3d.visualization.draw_geometries([cropped_pcd])
+            colors[robot_indicies_2] = [0, 0, 1]
+            pcd.colors = o3d.utility.Vector3dVector(colors)
+            o3d.visualization.draw_geometries([pcd])
 
         total_indices = np.union1d(robot_indicies_1, robot_indicies_2)
-        exclude_robot_points = np.delete(cropped_points, total_indices, axis=0)
-        exclude_robot_colors = np.delete(cropped_colors, total_indices, axis=0)
+        exclude_robot_points = np.delete(points, total_indices, axis=0)
+        exclude_robot_colors = np.delete(colors, total_indices, axis=0)
 
-        cropped_pcd.points = o3d.utility.Vector3dVector(exclude_robot_points)
-        cropped_pcd.colors = o3d.utility.Vector3dVector(exclude_robot_colors)
+        pcd.points = o3d.utility.Vector3dVector(exclude_robot_points)
+        pcd.colors = o3d.utility.Vector3dVector(exclude_robot_colors)
 
-    if debug:
-        o3d.visualization.draw_geometries([cropped_pcd])
-    o3d.io.write_point_cloud(str(output_pcd_path), cropped_pcd)
+        if debug:
+            o3d.visualization.draw_geometries([pcd])
 
-    return cropped_pcd
+        return pcd
+
+
+    # 가장자리 조금 자르기 remove outlier
+    def cut_outlier(pcd: o3d.geometry.PointCloud) -> o3d.geometry.PointCloud:
+        iqr_multiplier = 2.0 # 낮출수록 많이 잘려나감
+
+        points = np.asarray(pcd.points)
+        colors = np.asarray(pcd.colors)
+
+        # 열별로 IQR를 계산합니다.
+        q1 = np.percentile(points, 25, axis=0)
+        q3 = np.percentile(points, 75, axis=0)
+        iqr = q3 - q1
+
+        # 각 열에 대한 하한과 상한을 계산합니다.
+        lower_bound = q1 - iqr_multiplier * iqr
+        upper_bound = q3 + iqr_multiplier * iqr
+
+        # 각 열에서 아웃라이어를 식별합니다.
+        outlier_mask = (points < lower_bound) | (points > upper_bound)
+
+        # 행 중에서 모든 열이 아웃라이어가 아닌 경우를 찾아 데이터에서 제거합니다.
+        points = points[~np.any(outlier_mask, axis=1)]
+        colors = colors[~np.any(outlier_mask, axis=1)]
+
+        pcd.points = o3d.utility.Vector3dVector(points)
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+
+        if debug:
+            o3d.visualization.draw_geometries([pcd])
+
+        return pcd
+
+    pcd = convert_to_o3d_pcd(point_cloud)
+
+    crop1_pcd = crop_with_bbox(pcd)
+    o3d.io.write_point_cloud(str(output_dir / "crop1.ply"), crop1_pcd)
+
+    crop2_pcd = crop_robot_arm(crop1_pcd)
+    o3d.io.write_point_cloud(str(output_dir / "crop2.ply"), crop1_pcd)
+
+    crop3_pcd = cut_outlier(crop2_pcd)
+    o3d.io.write_point_cloud(str(output_dir / "crop3.ply"), crop1_pcd)
+
+    return crop3_pcd
 
 # if __name__ == '__main__':
 #     # model = create_model("Unet_2020-10-30")
