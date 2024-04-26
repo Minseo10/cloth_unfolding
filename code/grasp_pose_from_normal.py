@@ -208,7 +208,7 @@ def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd 
     colors = color_near_specific_point(edge_points, point_colors, best_point, [0, 0, 1], 0.01)
     edge_pcd.colors = o3d.utility.Vector3dVector(colors)
 
-    if True:
+    if debug:
         o3d.visualization.draw_geometries([edge_pcd])
 
     if output_dir:
