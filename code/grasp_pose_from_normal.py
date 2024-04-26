@@ -417,10 +417,11 @@ if __name__ == '__main__':
     draw_pose(image_bgr, grasp_pose_fixed, intrinsics, X_W_C, 0.1)
     image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
 
-    plt.figure(figsize=(10, 5))
-    plt.imshow(image_rgb)
-    plt.title("Example grasp pose")
-    plt.show()
+    if debug:
+        plt.figure(figsize=(10, 5))
+        plt.imshow(image_rgb)
+        plt.title("Example grasp pose")
+        plt.show()
 
     grasps_dir = f"data/grasps_{sample_id}"
     grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
