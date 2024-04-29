@@ -405,6 +405,11 @@ if __name__ == '__main__':
         output_dir=processing_dir,
         debug=debug,
     )
+    point, normal = find_best_point_and_normal_vector_5(
+        pcd=sample.processing.cropped_point_cloud,
+        output_dir=processing_dir,
+        debug=debug,
+    )
 
     # grasp direction (vector) -> grasp pose (rpy)
     # Calculate world frame's z-axis in camera frame
