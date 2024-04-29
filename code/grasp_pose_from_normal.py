@@ -399,12 +399,20 @@ if __name__ == '__main__':
         output_dir = processing_dir,
         debug = debug,
     )
+
+    ## dry-run comment
+    # approach direction 은 계산값을 쓰고 x, y 방향을 rotation 하여 init grasp pose 와 비슷한 것을 고르면
+    # motion planning 에서 덜 실패할 것이다
+
+    # tshirt OK OK / towel No / towel ok / tshirt 가장자리 못 잡음
     point, normal = find_best_point_and_normal_vector_4(
         pcd=sample.processing.cropped_point_cloud,
         edge_pcd=sample.processing.edge_point_cloud,
         output_dir=processing_dir,
         debug=debug,
     )
+
+    # tshirt no / towel ok / towel no
     point, normal = find_best_point_and_normal_vector_5(
         pcd=sample.processing.cropped_point_cloud,
         edge_pcd=sample.processing.edge_point_cloud,
