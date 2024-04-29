@@ -264,6 +264,7 @@ if __name__ == '__main__':
     debug = True
     from_server = False
     to_server = False
+    start_time = time.time()
 
     server_url = "https://robotlab.ugent.be"
 
@@ -280,7 +281,7 @@ if __name__ == '__main__':
         sample_dir = Path(f"../datasets/cloth_competition_dataset_0001/{sample_id}")
         observation_dir = sample_dir / "observation_start"
 
-    start_time = time.time()
+    middle_time = time.time()
 
     sample = Sample(
         observation=load_competition_observation(observation_dir),
@@ -437,5 +438,7 @@ if __name__ == '__main__':
         upload_grasp(grasp_pose_file, "test", sample_id, server_url)
 
     end_time = time.time()
+    download_time = middle_time - start_time
     execution_time = end_time - start_time
+    print(f"다운로 시간: {download_time:.6f}초")
     print(f"코드 실행 시간: {execution_time:.6f}초")
