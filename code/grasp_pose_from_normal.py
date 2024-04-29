@@ -229,6 +229,57 @@ def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd 
     return best_point, normal
 
 
+# 적당히 뾰족한 애들 중 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
+def find_best_point_and_normal_vector_5(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
+                                        output_dir: Path = None, debug = False):
+    edge_points = np.asarray(edge_pcd.points)
+    edge_colors = np.asarray(edge_pcd.colors)
+
+    sharp_percent = 0.8
+    sharp_cutline = np.min(edge_colors[:, 0]) * sharp_percent + (1 - sharp_percent) * np.max(edge_colors[:, 0])
+    sharp_mask = edge_colors[:, 0] > sharp_cutline
+
+    edge_points = edge_points[sharp_mask]
+    sorted_indices = np.argsort(edge_points[:, 0])
+    sorted_points = edge_points[sorted_indices]
+
+    # x 값이 가장 작은 포인트 추출
+    x_count = 100
+    small_x_points = sorted_points[:x_count]
+
+    # 그 중 z 값이 가장 작은 포인트 추출
+    min_z_index = np.argmin(small_x_points[:, 2])
+    best_point = small_x_points[min_z_index]
+
+    normal = calculate_normal_from_best_to_mean(pcd, best_point, debug)
+
+    if debug:
+        print("Best point: ", best_point, "\n")
+        print("Normal vector: ", normal, "\n")
+
+    return best_point, normal
+
+
+def calculate_normal_from_best_to_mean(pcd, best_point, debug=False):
+    pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+    # [k, idx, _] = pcd_tree.search_radius_vector_3d(best_point, 0.02)
+    [k, idx, _] = pcd_tree.search_knn_vector_3d(best_point, 2000)
+    np.asarray(pcd.colors)[idx[1:], :] = [0, 1, 0]
+
+    near_points = np.asarray(pcd.points)[idx[1:], :]
+    mean_point = near_points.mean(axis=0)
+
+    color_near_specific_point(np.asarray(pcd.points), np.asarray(pcd.colors), mean_point, [0, 0, 1], 0.01)
+    color_near_specific_point(np.asarray(pcd.points), np.asarray(pcd.colors), best_point, [1, 0, 0], 0.01)
+
+    if debug:
+        o3d.visualization.draw_geometries([pcd])
+
+    approach = mean_point - best_point
+
+    return approach
+
+
 def color_near_specific_point(points, colors, point, color, tolerance):
     x_condition = (points[:, 0] >= point[0] - tolerance) & (points[:, 0] <= point[0] + tolerance)
     y_condition = (points[:, 1] >= point[1] - tolerance) & (points[:, 1] <= point[1] + tolerance)
