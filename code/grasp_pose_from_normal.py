@@ -315,6 +315,7 @@ if __name__ == '__main__':
     debug = True
     from_server = False
     to_server = False
+    ftn = 5
     start_time = time.time()
 
     server_url = "https://robotlab.ugent.be"
@@ -386,39 +387,51 @@ if __name__ == '__main__':
     # normal vector 옷 바깥쪽으로 뒤집기
     sample.processing.cropped_point_cloud.orient_normals_consistent_tangent_plane(k=15)
 
-    # find corresponding point in point cloud
-    point, normal = find_best_point_and_normal_vector_2(
-        pcd = sample.processing.cropped_point_cloud,
-        edge_pcd = sample.processing.edge_point_cloud,
-        output_dir = processing_dir,
-        debug = debug,
-    )
-    point, normal = find_best_point_and_normal_vector_3(
-        pcd = sample.processing.cropped_point_cloud,
-        edge_pcd = sample.processing.edge_point_cloud,
-        output_dir = processing_dir,
-        debug = debug,
-    )
+    point = None
+    normal = None
 
     ## dry-run comment
     # approach direction 은 계산값을 쓰고 x, y 방향을 rotation 하여 init grasp pose 와 비슷한 것을 고르면
     # motion planning 에서 덜 실패할 것이다
-
-    # tshirt OK OK / towel No / towel ok / tshirt 가장자리 못 잡음
-    point, normal = find_best_point_and_normal_vector_4(
-        pcd=sample.processing.cropped_point_cloud,
-        edge_pcd=sample.processing.edge_point_cloud,
-        output_dir=processing_dir,
-        debug=debug,
-    )
-
-    # tshirt no / towel ok / towel no
-    point, normal = find_best_point_and_normal_vector_5(
-        pcd=sample.processing.cropped_point_cloud,
-        edge_pcd=sample.processing.edge_point_cloud,
-        output_dir=processing_dir,
-        debug=debug,
-    )
+    match ftn:
+        case 2:
+            # find corresponding point in point cloud
+            point, normal = find_best_point_and_normal_vector_2(
+                pcd = sample.processing.cropped_point_cloud,
+                edge_pcd = sample.processing.edge_point_cloud,
+                output_dir = processing_dir,
+                debug = debug,
+            )
+        case 3:
+            point, normal = find_best_point_and_normal_vector_3(
+                pcd = sample.processing.cropped_point_cloud,
+                edge_pcd = sample.processing.edge_point_cloud,
+                output_dir = processing_dir,
+                debug = debug,
+            )
+        case 4:
+            # tshirt OK OK / towel No / towel ok / tshirt 가장자리 못 잡음
+            point, normal = find_best_point_and_normal_vector_4(
+                pcd=sample.processing.cropped_point_cloud,
+                edge_pcd=sample.processing.edge_point_cloud,
+                output_dir=processing_dir,
+                debug=debug,
+            )
+        case 5:
+            # tshirt no / towel ok / towel no
+            point, normal = find_best_point_and_normal_vector_5(
+                pcd=sample.processing.cropped_point_cloud,
+                edge_pcd=sample.processing.edge_point_cloud,
+                output_dir=processing_dir,
+                debug=debug,
+            )
+        case _:
+            point, normal = find_best_point_and_normal_vector_5(
+                pcd=sample.processing.cropped_point_cloud,
+                edge_pcd=sample.processing.edge_point_cloud,
+                output_dir=processing_dir,
+                debug=debug,
+            )
 
     # grasp direction (vector) -> grasp pose (rpy)
     # Calculate world frame's z-axis in camera frame
@@ -472,9 +485,11 @@ if __name__ == '__main__':
     # line_set_line_width = 4
 
 
-
-    # upload to server
-    grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
+    match ftn:
+        case 5:
+            grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
+        case _:
+            grasp_pose_fixed = grasp_hanging_cloth_pose(point, normal, 0.05)
 
     # open 3d visualize
     if debug:
