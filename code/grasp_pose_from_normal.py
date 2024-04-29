@@ -407,6 +407,7 @@ if __name__ == '__main__':
     )
     point, normal = find_best_point_and_normal_vector_5(
         pcd=sample.processing.cropped_point_cloud,
+        edge_pcd=sample.processing.edge_point_cloud,
         output_dir=processing_dir,
         debug=debug,
     )
