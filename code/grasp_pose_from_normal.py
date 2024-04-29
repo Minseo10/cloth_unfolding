@@ -487,9 +487,9 @@ if __name__ == '__main__':
 
     match ftn:
         case 5:
-            grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
-        case _:
             grasp_pose_fixed = grasp_hanging_cloth_pose(point, normal, 0.05)
+        case _:
+            grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
 
     # open 3d visualize
     if debug:
