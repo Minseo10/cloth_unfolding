@@ -122,7 +122,7 @@ def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
 # sharp edge 위의 점들 중 x 축으로 가장 톡 튀어 나와있는 점을 best point 라고 찾고, 그 점에서의 normal vector 예측값을 grasp direction 으로 찾는 방식
 def find_best_point_and_normal_vector_2(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
                                         output_dir: Path = None, debug = False):
-    edge_points = np.asarray(edge_pcd.points)
+    edge_points = np.asarray(edge_pcd.points).copy()
     point_idx = np.argmin(edge_points[:, 0])  # idx in edge points array
     best_point = edge_points[point_idx]
 
@@ -152,8 +152,8 @@ def find_best_point_and_normal_vector_2(pcd : o3d.geometry.PointCloud, edge_pcd 
 # 가장 뾰족한 점은 max sigma (red color value) 를 갖고 있고, 상당히 앞에 나와 있는 점들 중 가장 뾰족한 점을 best point 로 선정, grasp direction 은 normal vector
 def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
                                         output_dir: Path = None, debug = False):
-    edge_points = np.asarray(edge_pcd.points)
-    colors = np.asarray(edge_pcd.colors)
+    edge_points = np.asarray(edge_pcd.points).copy()
+    colors = np.asarray(edge_pcd.colors).copy()
 
     condition1 = edge_points[:, 0] < np.min(edge_points[:, 0]) + 0.05
     condition2 = edge_points[:, 1] < np.max(edge_points[:, 1]) - 0.05
@@ -187,8 +187,8 @@ def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd 
 # 적당히 뾰족한 애들 중 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
 def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
                                         output_dir: Path = None, debug = False):
-    edge_points = np.asarray(edge_pcd.points)
-    edge_colors = np.asarray(edge_pcd.colors)
+    edge_points = np.asarray(edge_pcd.points).copy()
+    edge_colors = np.asarray(edge_pcd.colors).copy()
 
     sharp_percent = 0.8
     sharp_cutline = np.min(edge_colors[:, 0]) * sharp_percent + (1 - sharp_percent) * np.max(edge_colors[:, 0])
@@ -232,8 +232,8 @@ def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd 
 # 적당히 뾰족한 애들 중 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
 def find_best_point_and_normal_vector_5(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
                                         output_dir: Path = None, debug = False):
-    edge_points = np.asarray(edge_pcd.points)
-    edge_colors = np.asarray(edge_pcd.colors)
+    edge_points = np.asarray(edge_pcd.points).copy()
+    edge_colors = np.asarray(edge_pcd.colors).copy()
 
     sharp_percent = 0.8
     sharp_cutline = np.min(edge_colors[:, 0]) * sharp_percent + (1 - sharp_percent) * np.max(edge_colors[:, 0])
