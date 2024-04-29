@@ -492,7 +492,7 @@ if __name__ == '__main__':
     grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
 
     if to_server:
-        upload_grasp(grasp_pose_file, "test", sample_id, server_url)
+        upload_grasp(grasp_pose_file, "Ewha Glab", sample_id, server_url)
 
     end_time = time.time()
     download_time = middle_time - start_time
