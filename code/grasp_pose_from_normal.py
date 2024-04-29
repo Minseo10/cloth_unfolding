@@ -251,6 +251,9 @@ def find_best_point_and_normal_vector_5(pcd : o3d.geometry.PointCloud, edge_pcd 
         print("Best point: ", best_point, "\n")
         print("Normal vector: ", normal, "\n")
 
+    if output_dir:
+        o3d.io.write_point_cloud(str(output_dir / "ftn5.ply"), edge_pcd)
+
     return best_point, normal
 
 
