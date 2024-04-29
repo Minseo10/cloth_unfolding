@@ -92,7 +92,7 @@ def rotation_matrix_to_rpy(rotation_matrix):
 
 
 # annotated grasp pose given by organizer
-def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
+def find_best_point_and_approach_direction(root_path, origin_pcd, edge_pcd):
     # best point selection
     # 현재는 bring real grasp point from grasp_pose.json
     grasp_pose_filepath = root_path + "grasp/grasp_pose.json"
@@ -120,8 +120,8 @@ def find_best_point_and_normal_vector(root_path, origin_pcd, edge_pcd):
 
 
 # sharp edge 위의 점들 중 x 축으로 가장 톡 튀어 나와있는 점을 best point 라고 찾고, 그 점에서의 normal vector 예측값을 grasp direction 으로 찾는 방식
-def find_best_point_and_normal_vector_2(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
-                                        output_dir: Path = None, debug = False):
+def find_best_point_and_approach_direction_2(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
+                                             output_dir: Path = None, debug = False):
     edge_points = np.asarray(edge_pcd.points).copy()
     point_idx = np.argmin(edge_points[:, 0])  # idx in edge points array
     best_point = edge_points[point_idx]
@@ -149,8 +149,8 @@ def find_best_point_and_normal_vector_2(pcd : o3d.geometry.PointCloud, edge_pcd 
 
 
 # 가장 뾰족한 점은 max sigma (red color value) 를 갖고 있고, 상당히 앞에 나와 있는 점들 중 가장 뾰족한 점을 best point 로 선정, grasp direction 은 normal vector
-def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
-                                        output_dir: Path = None, debug = False):
+def find_best_point_and_approach_direction_3(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
+                                             output_dir: Path = None, debug = False):
     edge_points = np.asarray(edge_pcd.points).copy()
     colors = np.asarray(edge_pcd.colors).copy()
 
@@ -182,8 +182,8 @@ def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd 
 
 
 # 적당히 뾰족한 애들 중 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
-def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
-                                        output_dir: Path = None, debug = False):
+def find_best_point_and_approach_direction_4(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
+                                             output_dir: Path = None, debug = False):
     edge_points = np.asarray(edge_pcd.points).copy()
     edge_colors = np.asarray(edge_pcd.colors).copy()
 
@@ -224,8 +224,8 @@ def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd 
 
 
 # 적당히 뾰족한 애들 중 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
-def find_best_point_and_normal_vector_5(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
-                                        output_dir: Path = None, debug = False):
+def find_best_point_and_approach_direction_5(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
+                                             output_dir: Path = None, debug = False):
     edge_points = np.asarray(edge_pcd.points).copy()
     edge_colors = np.asarray(edge_pcd.colors).copy()
 
@@ -385,7 +385,7 @@ if __name__ == '__main__':
     sample.processing.cropped_point_cloud.orient_normals_consistent_tangent_plane(k=15)
 
     point = None
-    normal = None
+    approach = None
 
     ## dry-run comment
     # approach direction 은 계산값을 쓰고 x, y 방향을 rotation 하여 init grasp pose 와 비슷한 것을 고르면
@@ -393,14 +393,14 @@ if __name__ == '__main__':
     match ftn:
         case 2:
             # find corresponding point in point cloud
-            point, normal = find_best_point_and_normal_vector_2(
+            point, approach = find_best_point_and_approach_direction_2(
                 pcd = sample.processing.cropped_point_cloud,
                 edge_pcd = sample.processing.edge_point_cloud,
                 output_dir = processing_dir,
                 debug = debug,
             )
         case 3:
-            point, normal = find_best_point_and_normal_vector_3(
+            point, approach = find_best_point_and_approach_direction_3(
                 pcd = sample.processing.cropped_point_cloud,
                 edge_pcd = sample.processing.edge_point_cloud,
                 output_dir = processing_dir,
@@ -408,7 +408,7 @@ if __name__ == '__main__':
             )
         case 4:
             # tshirt OK OK / towel No / towel ok / tshirt 가장자리 못 잡음
-            point, normal = find_best_point_and_normal_vector_4(
+            point, approach = find_best_point_and_approach_direction_4(
                 pcd=sample.processing.cropped_point_cloud,
                 edge_pcd=sample.processing.edge_point_cloud,
                 output_dir=processing_dir,
@@ -416,14 +416,14 @@ if __name__ == '__main__':
             )
         case 5:
             # tshirt no / towel ok / towel no
-            point, normal = find_best_point_and_normal_vector_5(
+            point, approach = find_best_point_and_approach_direction_5(
                 pcd=sample.processing.cropped_point_cloud,
                 edge_pcd=sample.processing.edge_point_cloud,
                 output_dir=processing_dir,
                 debug=debug,
             )
         case _:
-            point, normal = find_best_point_and_normal_vector_5(
+            point, approach = find_best_point_and_approach_direction_5(
                 pcd=sample.processing.cropped_point_cloud,
                 edge_pcd=sample.processing.edge_point_cloud,
                 output_dir=processing_dir,
@@ -433,7 +433,7 @@ if __name__ == '__main__':
     # grasp direction (vector) -> grasp pose (rpy)
     # Calculate world frame's z-axis in camera frame
     z_axis_world = np.array([0, 0, 1])
-    plane_normal = np.cross(z_axis_world, normal)
+    plane_normal = np.cross(z_axis_world, approach)
     aligned_normal = np.cross(z_axis_world, plane_normal)
     grasp_z = aligned_normal / np.linalg.norm(aligned_normal)
     grasp_y = z_axis_world
@@ -484,7 +484,7 @@ if __name__ == '__main__':
 
     match ftn:
         case 5:
-            grasp_pose_fixed = grasp_hanging_cloth_pose(point, normal, 0.05)
+            grasp_pose_fixed = grasp_hanging_cloth_pose(point, approach, 0.05)
         case _:
             grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
 
