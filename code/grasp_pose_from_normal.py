@@ -127,10 +127,9 @@ def find_best_point_and_normal_vector_2(pcd : o3d.geometry.PointCloud, edge_pcd 
     best_point = edge_points[point_idx]
 
     # check min x point with blue color
-    point_colors = np.asarray(edge_pcd.colors)
-    point_colors[:] = [1, 0, 0]
-    colors = color_near_specific_point(edge_points, point_colors, best_point, [0, 0, 1], 0.01)
-    edge_pcd.colors = o3d.utility.Vector3dVector(colors)
+    # point_colors = np.asarray(edge_pcd.colors)
+    # point_colors[:] = [1, 0, 0]
+    color_near_specific_point(np.asarray(edge_pcd.points), np.asarray(edge_pcd.colors), best_point, [0, 0, 1], 0.01)
 
     if debug:
         o3d.visualization.draw_geometries([edge_pcd])
@@ -163,9 +162,7 @@ def find_best_point_and_normal_vector_3(pcd : o3d.geometry.PointCloud, edge_pcd 
     best_point = edge_points[point_idx]
 
     # check min x point with blue color
-    colors[:] = [1, 0, 0]
-    colors = color_near_specific_point(edge_points, colors, best_point, [0, 0, 1], 0.01)
-    edge_pcd.colors = o3d.utility.Vector3dVector(colors)
+    color_near_specific_point(np.asarray(edge_pcd.points), np.asarray(edge_pcd.colors), best_point, [0, 0, 1], 0.01)
 
     if debug:
         o3d.visualization.draw_geometries([edge_pcd])
@@ -207,10 +204,7 @@ def find_best_point_and_normal_vector_4(pcd : o3d.geometry.PointCloud, edge_pcd 
     best_point = small_x_points[min_z_index]
 
     # check min x point with blue color
-    point_colors = np.asarray(edge_pcd.colors)
-    point_colors[:] = [1, 0, 0]
-    colors = color_near_specific_point(edge_points, point_colors, best_point, [0, 0, 1], 0.01)
-    edge_pcd.colors = o3d.utility.Vector3dVector(colors)
+    color_near_specific_point(np.asarray(edge_pcd.points), np.asarray(edge_pcd.colors), best_point, [0, 0, 1], 0.01)
 
     if debug:
         o3d.visualization.draw_geometries([edge_pcd])
