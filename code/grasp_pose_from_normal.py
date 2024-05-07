@@ -533,13 +533,6 @@ if __name__ == '__main__':
             case _:
                 grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
 
-        # open 3d visualize
-        if debug:
-            mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
-            mesh.scale(0.1, center=(0, 0, 0))
-            mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
-            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
-
         # check motion planning
         planning = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
 
@@ -551,6 +544,13 @@ if __name__ == '__main__':
             print("Planning failed!")
             print("Grasp pose is ", grasp_pose_fixed)
             is_success = False
+            
+    # open 3d visualize
+    if debug:
+        mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+        mesh.scale(0.1, center=(0, 0, 0))
+        mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
+        o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
 
     X_W_C = sample.observation.camera_pose_in_world
     intrinsics = sample.observation.camera_intrinsics
