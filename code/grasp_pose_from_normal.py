@@ -34,6 +34,9 @@ from cloth_tools.annotation.grasp_annotation import grasp_hanging_cloth_pose
 MIN = -4
 MAX = 4
 
+RED_COLOR = np.array([1, 0, 0])
+GREEN_COLOR = np.array([0, 1, 0])
+BLUE_COLOR = np.array([0, 0, 1])
 
 @dataclass
 class ProcessingData:
@@ -130,10 +133,12 @@ def find_best_point_and_approach_direction_2(pcd : o3d.geometry.PointCloud, edge
     # check min x point with blue color
     # point_colors = np.asarray(edge_pcd.colors)
     # point_colors[:] = [1, 0, 0]
-    color_near_specific_point(np.asarray(edge_pcd.points), np.asarray(edge_pcd.colors), best_point, [0, 0, 1], 0.01)
 
     if debug:
-        o3d.visualization.draw_geometries([edge_pcd])
+        color_near_specific_point(
+            np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
+            [best_point], [BLUE_COLOR], [0.01]
+        )
 
     if output_dir:
         o3d.io.write_point_cloud(str(output_dir / "ftn2.ply"), edge_pcd)
@@ -163,10 +168,10 @@ def find_best_point_and_approach_direction_3(pcd : o3d.geometry.PointCloud, edge
     best_point = edge_points[point_idx]
 
     # check min x point with blue color
-    color_near_specific_point(np.asarray(edge_pcd.points), np.asarray(edge_pcd.colors), best_point, [0, 0, 1], 0.01)
-
     if debug:
-        o3d.visualization.draw_geometries([edge_pcd])
+        color_near_specific_point(
+            np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
+            [best_point], [BLUE_COLOR], [0.01])
 
     if output_dir:
         o3d.io.write_point_cloud(str(output_dir / "ftn3.ply"), edge_pcd)
@@ -205,10 +210,11 @@ def find_best_point_and_approach_direction_4(pcd : o3d.geometry.PointCloud, edge
     best_point = small_x_points[min_z_index]
 
     # check min x point with blue color
-    color_near_specific_point(np.asarray(edge_pcd.points), np.asarray(edge_pcd.colors), best_point, [0, 0, 1], 0.01)
-
     if debug:
-        o3d.visualization.draw_geometries([edge_pcd])
+        color_near_specific_point(
+            np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
+            [best_point], [GREEN_COLOR + BLUE_COLOR], [0.01]
+        )
 
     if output_dir:
         o3d.io.write_point_cloud(str(output_dir / "ftn4.ply"), edge_pcd)
@@ -246,6 +252,12 @@ def find_best_point_and_approach_direction_5(pcd : o3d.geometry.PointCloud, edge
     min_z_index = np.argmin(small_x_points[:, 2])
     best_point = small_x_points[min_z_index]
 
+    if debug:
+        color_near_specific_point(
+            np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
+            [best_point], [BLUE_COLOR], [0.01]
+        )
+
     normal = calculate_normal_from_best_to_mean(pcd, best_point, debug)
 
     if debug:
@@ -262,12 +274,23 @@ def calculate_normal_from_best_to_mean(pcd, best_point, debug=False):
     pcd_tree = o3d.geometry.KDTreeFlann(pcd)
     # [k, idx, _] = pcd_tree.search_radius_vector_3d(best_point, 0.02)
     [k, idx, _] = pcd_tree.search_knn_vector_3d(best_point, 2000)
-    np.asarray(pcd.colors)[idx[1:], :] = [0, 1, 0]
 
-    near_points = np.asarray(pcd.points)[idx[1:], :]
+    points = np.asarray(pcd.points).copy()
+    colors = np.asarray(pcd.colors).copy()
+
+    colors[idx[1:], :] = GREEN_COLOR
+
+    near_points = points[idx[1:], :]
     mean_point = near_points.mean(axis=0)
 
-    color_near_specific_point(np.asarray(pcd.points), np.asarray(pcd.colors), mean_point, [0, 0, 1], 0.01)
+    color_near_specific_point(
+        points, colors
+        [mean_point, best_point],
+        [RED_COLOR, BLUE_COLOR],
+        [0.01, 0.01]
+    )
+
+    color_near_specific_point(np.asarray(pcd.points), np.asarray(pcd.colors), [mean_point], [BLUE_COLOR], [0.01])
     color_near_specific_point(np.asarray(pcd.points), np.asarray(pcd.colors), best_point, [1, 0, 0], 0.01)
 
     if debug:
@@ -278,12 +301,53 @@ def calculate_normal_from_best_to_mean(pcd, best_point, debug=False):
     return approach
 
 
-def color_near_specific_point(points, colors, point, color, tolerance):
-    x_condition = (points[:, 0] >= point[0] - tolerance) & (points[:, 0] <= point[0] + tolerance)
-    y_condition = (points[:, 1] >= point[1] - tolerance) & (points[:, 1] <= point[1] + tolerance)
-    z_condition = (points[:, 2] >= point[2] - tolerance) & (points[:, 2] <= point[2] + tolerance)
-    matching_indices = np.where(x_condition & y_condition & z_condition)[0]
-    colors[matching_indices] = color
+# def calculate_normal_from_best_to_mean(pcd, best_point, debug=False):
+#     points = np.asarray(pcd.points).copy()
+#     colors = np.asarray(pcd.colors).copy()
+#
+#     pcd_tree = o3d.geometry.KDTreeFlann(pcd)
+#     # [k, idx, _] = pcd_tree.search_radius_vector_3d(best_point, 0.02)
+#     [k, idx, _] = pcd_tree.search_knn_vector_3d(best_point, 2000)
+#
+#     near_points = np.asarray(pcd.points).copy()[idx[1:], :]
+#     mean_point = near_points.mean(axis=0)
+#
+#     if debug:
+#         colors[idx[1:], :] = GREEN_COLOR
+#
+#         color_near_specific_point(
+#             points, colors
+#             [mean_point, best_point],
+#             [RED_COLOR, BLUE_COLOR],
+#             [0.01, 0.01]
+#         )
+#
+#     approach = mean_point - best_point
+#
+#     return approach
+#
+
+# points, colors 매개변수 넘길 때 얕은 복사인지, 깊은 복사인지 주의 깊게 고려하고 사용할 것
+def color_near_specific_point(points, colors, target_points, target_colors, tolerances):
+    assert len(target_points) == len(target_colors) and len(target_colors) == len(tolerances), \
+        "표시하려는 점의 개수, 색의 개수, 칠하는 영역의 범위 개수가 같아야 합니다"
+
+    for i in range(len(target_colors)):
+        target_point = target_points[i]
+        target_color = target_colors[i]
+        tolerance = tolerances[i]
+
+        x_condition = (points[:, 0] >= target_point[0] - tolerance) & (points[:, 0] <= target_point[0] + tolerance)
+        y_condition = (points[:, 1] >= target_point[1] - tolerance) & (points[:, 1] <= target_point[1] + tolerance)
+        z_condition = (points[:, 2] >= target_point[2] - tolerance) & (points[:, 2] <= target_point[2] + tolerance)
+        matching_indices = np.where(x_condition & y_condition & z_condition)[0]
+        colors[matching_indices] = target_color
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+
+    o3d.visualization.draw_geometries([pcd])
 
     return colors
 
@@ -327,7 +391,7 @@ if __name__ == '__main__':
 
     else:
         sample_id = f"sample_{'{0:06d}'.format(1)}"
-        sample_dir = Path(f"../datasets/cloth_competition_dataset_0001/{sample_id}")
+        sample_dir = Path(f"../datasets/dry_run/{sample_id}")
         observation_dir = sample_dir / "observation_start"
 
     middle_time = time.time()
@@ -375,6 +439,9 @@ if __name__ == '__main__':
         uniformed = False,
     )  # from Difference_Eigenvalues.py
     sample.processing.edge_point_cloud = edge_pointcloud
+
+    if debug:
+        o3d.visualization.draw_geometries([edge_pointcloud])
 
     # estimate normal vectors
     sample.processing.cropped_point_cloud.estimate_normals(
@@ -495,6 +562,13 @@ if __name__ == '__main__':
             case _:
                 grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
 
+        # open 3d visualize
+        if debug:
+            mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+            mesh.scale(0.1, center=(0, 0, 0))
+            mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
+            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
+
         # check motion planning
         planning = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
 
@@ -506,14 +580,6 @@ if __name__ == '__main__':
             print("Planning failed!")
             print("Grasp pose is ", grasp_pose_fixed)
             is_success = False
-
-
-    # open 3d visualize
-    if debug:
-        mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
-        mesh.scale(0.1, center=(0,0,0))
-        mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
-        o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
 
     X_W_C = sample.observation.camera_pose_in_world
     intrinsics = sample.observation.camera_intrinsics
