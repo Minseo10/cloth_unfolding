@@ -171,7 +171,8 @@ def find_best_point_and_approach_direction_3(pcd : o3d.geometry.PointCloud, edge
     if debug:
         color_near_specific_point(
             np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
-            [best_point], [BLUE_COLOR], [0.01])
+            [best_point], [BLUE_COLOR], [0.01]
+        )
 
     if output_dir:
         o3d.io.write_point_cloud(str(output_dir / "ftn3.ply"), edge_pcd)
