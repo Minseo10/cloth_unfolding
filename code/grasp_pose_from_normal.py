@@ -492,9 +492,9 @@ if __name__ == '__main__':
 
         match ftn:
             case 5:
-                grasp_pose_fixed = grasp_hanging_cloth_pose(point, approach, 0.05)
+                grasp_pose_fixed = grasp_hanging_cloth_pose(point, approach, 0.07)
             case _:
-                grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
+                grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.07)
 
         # check motion planning
         planning = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
