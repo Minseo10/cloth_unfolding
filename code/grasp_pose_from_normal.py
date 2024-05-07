@@ -362,7 +362,7 @@ if __name__ == '__main__':
 
     else:
         sample_id = f"sample_{'{0:06d}'.format(1)}"
-        sample_dir = Path(f"../datasets/dry_run/{sample_id}")
+        sample_dir = Path(f"../datasets/cloth_competition_dataset_0001/{sample_id}")
         observation_dir = sample_dir / "observation_start"
 
     middle_time = time.time()
