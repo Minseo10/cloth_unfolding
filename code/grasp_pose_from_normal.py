@@ -389,6 +389,7 @@ if __name__ == '__main__':
 
     priority = [5, 4, 3, 2]
     is_success = False
+    rotation = False
 
     while (not is_success):
         ftn = priority.pop(0)
@@ -505,7 +506,41 @@ if __name__ == '__main__':
         else:
             print("Planning failed!")
             print("Grasp pose is ", grasp_pose_fixed)
-            is_success = False
+
+            # rotate grasps and check planning again
+            rotation = True
+            rotated_pose_1 = grasp_pose_fixed.copy()
+            gp.rotate_grasps(rotated_pose_1, 0, 0.5)
+
+            rotated_pose_2 = grasp_pose_fixed.copy()
+            gp.rotate_grasps(rotated_pose_2, np.pi/2, 0.5)
+
+            rotated_pose_3 = grasp_pose_fixed.copy()
+            gp.rotate_grasps(rotated_pose_3, np.pi, 0.5)
+
+            rotated_pose_4 = grasp_pose_fixed.copy()
+            gp.rotate_grasps(rotated_pose_4, 3*np.pi/2, 0.5)
+
+            planning_1 = gp.is_grasp_executable_fn(sample.observation, rotated_pose_1)
+            planning_2 = gp.is_grasp_executable_fn(sample.observation, rotated_pose_2)
+            planning_3 = gp.is_grasp_executable_fn(sample.observation, rotated_pose_3)
+            planning_4 = gp.is_grasp_executable_fn(sample.observation, rotated_pose_4)
+
+            print(f"Rotated grasp pose is \n{rotated_pose_1}\n {rotated_pose_2}\n {rotated_pose_3}\n {rotated_pose_4}\n")
+            planning_results = [planning_1, planning_2, planning_3, planning_4]
+            print("Planning results: ", planning_results)
+
+            first_true_index = planning_results.index(True) if True in planning_results else -1
+            if first_true_index == -1:  # planning failed
+                first_true_pose = None
+                print("Planning failed!")
+                is_success = False
+            else:  # planning ok
+                first_true_pose = [rotated_pose_1, rotated_pose_2, rotated_pose_3, rotated_pose_4][first_true_index]
+                grasp_pose_fixed = first_true_pose
+                print("Planning succeed!")
+                print("Grasp pose is ", grasp_pose_fixed)
+                is_success = True
 
 
     # open 3d visualize
@@ -514,6 +549,28 @@ if __name__ == '__main__':
         mesh.scale(0.1, center=(0,0,0))
         mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
         o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
+        # rotated grasps
+        if rotation:
+            mesh1 = o3d.geometry.TriangleMesh.create_coordinate_frame()
+            mesh1.scale(0.1, center=(0, 0, 0))
+            mesh1 = copy.deepcopy(mesh1).transform(rotated_pose_1)
+            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh1])
+
+            mesh2 = o3d.geometry.TriangleMesh.create_coordinate_frame()
+            mesh2.scale(0.1, center=(0, 0, 0))
+            mesh2 = copy.deepcopy(mesh2).transform(rotated_pose_2)
+            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh2])
+
+            mesh3 = o3d.geometry.TriangleMesh.create_coordinate_frame()
+            mesh3.scale(0.1, center=(0, 0, 0))
+            mesh3 = copy.deepcopy(mesh3).transform(rotated_pose_3)
+            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh3])
+
+            mesh4 = o3d.geometry.TriangleMesh.create_coordinate_frame()
+            mesh4.scale(0.1, center=(0, 0, 0))
+            mesh4 = copy.deepcopy(mesh4).transform(rotated_pose_4)
+            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh4])
+
 
     X_W_C = sample.observation.camera_pose_in_world
     intrinsics = sample.observation.camera_intrinsics
