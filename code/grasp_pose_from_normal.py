@@ -10,6 +10,7 @@ from airo_dataset_tools.data_parsers.pose import Pose
 import Difference_Eigenvalues as de
 import segment_crop as seg
 from pathlib import Path
+import grasp_planning as gp
 
 from cloth_tools.dataset.download import download_latest_observation
 from cloth_tools.dataset.bookkeeping import datetime_for_filename
@@ -312,7 +313,6 @@ if __name__ == '__main__':
     debug = True
     from_server = False
     to_server = False
-    ftn = 5
     start_time = time.time()
 
     server_url = "https://robotlab.ugent.be"
@@ -387,106 +387,126 @@ if __name__ == '__main__':
     point = None
     approach = None
 
-    ## dry-run comment
-    # approach direction 은 계산값을 쓰고 x, y 방향을 rotation 하여 init grasp pose 와 비슷한 것을 고르면
-    # motion planning 에서 덜 실패할 것이다
-    match ftn:
-        case 2:
-            # find corresponding point in point cloud
-            point, approach = find_best_point_and_approach_direction_2(
-                pcd = sample.processing.cropped_point_cloud,
-                edge_pcd = sample.processing.edge_point_cloud,
-                output_dir = processing_dir,
-                debug = debug,
-            )
-        case 3:
-            point, approach = find_best_point_and_approach_direction_3(
-                pcd = sample.processing.cropped_point_cloud,
-                edge_pcd = sample.processing.edge_point_cloud,
-                output_dir = processing_dir,
-                debug = debug,
-            )
-        case 4:
-            # tshirt OK OK / towel No / towel ok / tshirt 가장자리 못 잡음
-            point, approach = find_best_point_and_approach_direction_4(
-                pcd=sample.processing.cropped_point_cloud,
-                edge_pcd=sample.processing.edge_point_cloud,
-                output_dir=processing_dir,
-                debug=debug,
-            )
-        case 5:
-            # tshirt no / towel ok / towel no
-            point, approach = find_best_point_and_approach_direction_5(
-                pcd=sample.processing.cropped_point_cloud,
-                edge_pcd=sample.processing.edge_point_cloud,
-                output_dir=processing_dir,
-                debug=debug,
-            )
-        case _:
-            point, approach = find_best_point_and_approach_direction_5(
-                pcd=sample.processing.cropped_point_cloud,
-                edge_pcd=sample.processing.edge_point_cloud,
-                output_dir=processing_dir,
-                debug=debug,
-            )
+    priority = [5, 4, 3, 2]
+    is_success = False
 
-    # grasp direction (vector) -> grasp pose (rpy)
-    # Calculate world frame's z-axis in camera frame
-    z_axis_world = np.array([0, 0, 1])
-    plane_normal = np.cross(z_axis_world, approach)
-    aligned_normal = np.cross(z_axis_world, plane_normal)
-    grasp_z = aligned_normal / np.linalg.norm(aligned_normal)
-    grasp_y = z_axis_world
-    grasp_y = (-1) * grasp_y
-    grasp_x = np.cross(grasp_y, grasp_z)
-    grasp_x /= np.linalg.norm(grasp_x)
+    while (not is_success):
+        ftn = priority.pop(0)
+        print(f"{ftn}번째 방법을 사용합니다.")
 
-    # # add grasp depth (0.5cm)
-    # point = point + grasp_z * 0.005
-    #
-    # # grasp pose w.r.t world frame
-    # grasp_R = [[grasp_x[0], grasp_y[0], grasp_z[0]], [grasp_x[1], grasp_y[1], grasp_z[1]], [grasp_x[2], grasp_y[2], grasp_z[2]]]
-    # T = np.eye(4)
-    # T[:3, :3] = grasp_R
-    # T[0, 3] = point[0]
-    # T[1, 3] = point[1]
-    # T[2, 3] = point[2]
-    # mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
-    # mesh.scale(0.1, center=(0,0,0))
-    # mesh = copy.deepcopy(mesh).transform(T)
-    #
-    # # print grasp pose
-    # roll, pitch, yaw = rotation_matrix_to_rpy(grasp_R)
-    #
-    # print("X (meters):", point[0])
-    # print("Y (meters):", point[1])
-    # print("Z (meters):", point[2])
-    # print("Roll (radians):", roll)
-    # print("Pitch (radians):", pitch)
-    # print("Yaw (radians):", yaw)
-    #
-    # if debug:
-    #     print("Roll (radians):", roll)
-    #     print("Pitch (radians):", pitch)
-    #     print("Yaw (radians):", yaw)
+        ## dry-run comment
+        # approach direction 은 계산값을 쓰고 x, y 방향을 rotation 하여 init grasp pose 와 비슷한 것을 고르면
+        # motion planning 에서 덜 실패할 것이다
+        match ftn:
+            case 2:
+                # find corresponding point in point cloud
+                point, approach = find_best_point_and_approach_direction_2(
+                    pcd = sample.processing.cropped_point_cloud,
+                    edge_pcd = sample.processing.edge_point_cloud,
+                    output_dir = processing_dir,
+                    debug = debug,
+                )
+            case 3:
+                point, approach = find_best_point_and_approach_direction_3(
+                    pcd = sample.processing.cropped_point_cloud,
+                    edge_pcd = sample.processing.edge_point_cloud,
+                    output_dir = processing_dir,
+                    debug = debug,
+                )
+            case 4:
+                # tshirt OK OK / towel No / towel ok / tshirt 가장자리 못 잡음
+                point, approach = find_best_point_and_approach_direction_4(
+                    pcd=sample.processing.cropped_point_cloud,
+                    edge_pcd=sample.processing.edge_point_cloud,
+                    output_dir=processing_dir,
+                    debug=debug,
+                )
+            case 5:
+                # tshirt no / towel ok / towel no
+                point, approach = find_best_point_and_approach_direction_5(
+                    pcd=sample.processing.cropped_point_cloud,
+                    edge_pcd=sample.processing.edge_point_cloud,
+                    output_dir=processing_dir,
+                    debug=debug,
+                )
+            case _:
+                point, approach = find_best_point_and_approach_direction_5(
+                    pcd=sample.processing.cropped_point_cloud,
+                    edge_pcd=sample.processing.edge_point_cloud,
+                    output_dir=processing_dir,
+                    debug=debug,
+                )
 
-    # visualize grasp pose at the grasp point
-    # start_point = point.tolist()
-    # end_point = (point + 0.1 * normal).tolist()
-    #
-    # line_set = o3d.geometry.LineSet(
-    #     points=o3d.utility.Vector3dVector([start_point, end_point]),
-    #     lines=o3d.utility.Vector2iVector([[0, 1]]),
-    # )
-    # line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]])
-    # line_set_line_width = 4
+        # grasp direction (vector) -> grasp pose (rpy)
+        # Calculate world frame's z-axis in camera frame
+        z_axis_world = np.array([0, 0, 1])
+        plane_normal = np.cross(z_axis_world, approach)
+        aligned_normal = np.cross(z_axis_world, plane_normal)
+        grasp_z = aligned_normal / np.linalg.norm(aligned_normal)
+        grasp_y = z_axis_world
+        grasp_y = (-1) * grasp_y
+        grasp_x = np.cross(grasp_y, grasp_z)
+        grasp_x /= np.linalg.norm(grasp_x)
+
+        # # add grasp depth (0.5cm)
+        # point = point + grasp_z * 0.005
+        #
+        # # grasp pose w.r.t world frame
+        # grasp_R = [[grasp_x[0], grasp_y[0], grasp_z[0]], [grasp_x[1], grasp_y[1], grasp_z[1]], [grasp_x[2], grasp_y[2], grasp_z[2]]]
+        # T = np.eye(4)
+        # T[:3, :3] = grasp_R
+        # T[0, 3] = point[0]
+        # T[1, 3] = point[1]
+        # T[2, 3] = point[2]
+        # mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+        # mesh.scale(0.1, center=(0,0,0))
+        # mesh = copy.deepcopy(mesh).transform(T)
+        #
+        # # print grasp pose
+        # roll, pitch, yaw = rotation_matrix_to_rpy(grasp_R)
+        #
+        # print("X (meters):", point[0])
+        # print("Y (meters):", point[1])
+        # print("Z (meters):", point[2])
+        # print("Roll (radians):", roll)
+        # print("Pitch (radians):", pitch)
+        # print("Yaw (radians):", yaw)
+        #
+        # if debug:
+        #     print("Roll (radians):", roll)
+        #     print("Pitch (radians):", pitch)
+        #     print("Yaw (radians):", yaw)
+
+        # visualize grasp pose at the grasp point
+        # start_point = point.tolist()
+        # end_point = (point + 0.1 * normal).tolist()
+        #
+        # line_set = o3d.geometry.LineSet(
+        #     points=o3d.utility.Vector3dVector([start_point, end_point]),
+        #     lines=o3d.utility.Vector2iVector([[0, 1]]),
+        # )
+        # line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]])
+        # line_set_line_width = 4
 
 
-    match ftn:
-        case 5:
-            grasp_pose_fixed = grasp_hanging_cloth_pose(point, approach, 0.05)
-        case _:
-            grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
+        match ftn:
+            case 5:
+                grasp_pose_fixed = grasp_hanging_cloth_pose(point, approach, 0.05)
+            case _:
+                grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.05)
+
+        # check motion planning
+        planning = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
+
+        if planning:
+            print("Planning succeed!")
+            print("Grasp pose is ", grasp_pose_fixed)
+            is_success = True
+        else:
+            print("Planning failed!")
+            print("Grasp pose is ", grasp_pose_fixed)
+            is_success = False
+
 
     # open 3d visualize
     if debug:
