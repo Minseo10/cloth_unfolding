@@ -117,8 +117,8 @@ def find_best_point_and_approach_direction(root_path, origin_pcd, edge_pcd):
     normal = normals_array[best_point_idx]
 
     if debug:
-        print("Best point: ", point, "\n")
-        print("Normal vector: ", normal, "\n")
+        print("Best point: ", point)
+        print("Normal vector: ", normal)
 
     return point, normal
 
@@ -148,8 +148,8 @@ def find_best_point_and_approach_direction_2(pcd : o3d.geometry.PointCloud, edge
     normal = np.asarray(pcd.normals)[min_distance_index]
 
     if debug:
-        print("Best point: ", best_point, "\n")
-        print("Normal vector: ", normal, "\n")
+        print("Best point: ", best_point)
+        print("Normal vector: ", normal)
 
     return best_point, normal
 
@@ -182,8 +182,8 @@ def find_best_point_and_approach_direction_3(pcd : o3d.geometry.PointCloud, edge
     normal = np.asarray(pcd.normals)[min_distance_index]
 
     if debug:
-        print("Best point: ", best_point, "\n")
-        print("Normal vector: ", normal, "\n")
+        print("Best point: ", best_point)
+        print("Normal vector: ", normal)
 
     return best_point, normal
 
@@ -225,8 +225,8 @@ def find_best_point_and_approach_direction_4(pcd : o3d.geometry.PointCloud, edge
     normal = np.asarray(pcd.normals)[min_distance_index]
 
     if debug:
-        print("Best point: ", best_point, "\n")
-        print("Normal vector: ", normal, "\n")
+        print("Best point: ", best_point)
+        print("Normal vector: ", normal)
 
     return best_point, normal
 
@@ -262,8 +262,8 @@ def find_best_point_and_approach_direction_5(pcd : o3d.geometry.PointCloud, edge
     normal = calculate_normal_from_best_to_mean(pcd, best_point, debug)
 
     if debug:
-        print("Best point: ", best_point, "\n")
-        print("Normal vector: ", normal, "\n")
+        print("Best point: ", best_point)
+        print("Normal vector: ", normal)
 
     if output_dir:
         o3d.io.write_point_cloud(str(output_dir / "ftn5.ply"), edge_pcd)
