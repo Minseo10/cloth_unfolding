@@ -213,7 +213,7 @@ def find_best_point_and_approach_direction_4(pcd : o3d.geometry.PointCloud, edge
     if debug:
         color_near_specific_point(
             np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
-            [best_point], [GREEN_COLOR + BLUE_COLOR], [0.01]
+            [best_point], [BLUE_COLOR], [0.01]
         )
 
     if output_dir:
@@ -280,52 +280,22 @@ def calculate_normal_from_best_to_mean(pcd, best_point, debug=False):
 
     colors[idx[1:], :] = GREEN_COLOR
 
-    near_points = points[idx[1:], :]
+    near_points = points[idx[1:], :].copy()
     mean_point = near_points.mean(axis=0)
 
-    color_near_specific_point(
-        points, colors
-        [mean_point, best_point],
-        [RED_COLOR, BLUE_COLOR],
-        [0.01, 0.01]
-    )
-
-    color_near_specific_point(np.asarray(pcd.points), np.asarray(pcd.colors), [mean_point], [BLUE_COLOR], [0.01])
-    color_near_specific_point(np.asarray(pcd.points), np.asarray(pcd.colors), best_point, [1, 0, 0], 0.01)
-
     if debug:
-        o3d.visualization.draw_geometries([pcd])
+        color_near_specific_point(
+            # np.asarray(pcd.points).copy(), np.asarray(pcd.colors).copy(),
+            points, colors,
+            [mean_point, best_point],
+            [RED_COLOR, BLUE_COLOR],
+            [0.01, 0.01]
+        )
 
     approach = mean_point - best_point
 
     return approach
 
-
-# def calculate_normal_from_best_to_mean(pcd, best_point, debug=False):
-#     points = np.asarray(pcd.points).copy()
-#     colors = np.asarray(pcd.colors).copy()
-#
-#     pcd_tree = o3d.geometry.KDTreeFlann(pcd)
-#     # [k, idx, _] = pcd_tree.search_radius_vector_3d(best_point, 0.02)
-#     [k, idx, _] = pcd_tree.search_knn_vector_3d(best_point, 2000)
-#
-#     near_points = np.asarray(pcd.points).copy()[idx[1:], :]
-#     mean_point = near_points.mean(axis=0)
-#
-#     if debug:
-#         colors[idx[1:], :] = GREEN_COLOR
-#
-#         color_near_specific_point(
-#             points, colors
-#             [mean_point, best_point],
-#             [RED_COLOR, BLUE_COLOR],
-#             [0.01, 0.01]
-#         )
-#
-#     approach = mean_point - best_point
-#
-#     return approach
-#
 
 # points, colors 매개변수 넘길 때 얕은 복사인지, 깊은 복사인지 주의 깊게 고려하고 사용할 것
 def color_near_specific_point(points, colors, target_points, target_colors, tolerances):
