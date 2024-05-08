@@ -249,28 +249,40 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
 
         return cropped_pcd
 
-
     def crop_robot_arm(pcd: o3d.geometry.PointCloud) -> o3d.geometry.PointCloud:
         points = np.asarray(pcd.points)
         colors = np.asarray(pcd.colors)
 
-        # cut 1: z 방향 상단 부분
-        robot_indicies_1 = crop_condition(points, 0.8, 0.3)
+        # high: 커질수록 위쪽, width: 작아질수록 오른쪽
+        robot_indicies_1 = crop_condition(points, 0, 0.9)
         if debug:
             colors[robot_indicies_1] = [1, 0, 0]
             pcd.colors = o3d.utility.Vector3dVector(colors)
             o3d.visualization.draw_geometries([pcd])
 
-        # cut 2: y 방향 좌단 부분
-        robot_indicies_2 = crop_condition(points, 0, 0.8)
+        robot_indicies_2 = crop_condition(points, 0.3, 0.7)
         if debug:
-            colors[robot_indicies_2] = [0, 0, 1]
+            colors[robot_indicies_2] = [1, 1, 0]
             pcd.colors = o3d.utility.Vector3dVector(colors)
             o3d.visualization.draw_geometries([pcd])
 
-        total_indices = np.union1d(robot_indicies_1, robot_indicies_2)
-        exclude_robot_points = np.delete(points, total_indices, axis=0)
-        exclude_robot_colors = np.delete(colors, total_indices, axis=0)
+        robot_indicies_3 = crop_condition(points, 0.5, 0.5)
+        if debug:
+            colors[robot_indicies_3] = [0, 0, 1]
+            pcd.colors = o3d.utility.Vector3dVector(colors)
+            o3d.visualization.draw_geometries([pcd])
+
+        robot_indicies_4 = crop_condition(points, 0.8, 0.3)
+        if debug:
+            colors[robot_indicies_4] = [1, 0, 1]
+            pcd.colors = o3d.utility.Vector3dVector(colors)
+            o3d.visualization.draw_geometries([pcd])
+
+        # 모든 robot_indices 배열을 결합하여 색상이 변경된 모든 포인트의 인덱스 배열 생성
+        combined_robot_indices = np.concatenate([robot_indicies_1, robot_indicies_2, robot_indicies_3, robot_indicies_4])
+
+        exclude_robot_points = np.delete(points, combined_robot_indices, axis=0)
+        exclude_robot_colors = np.delete(colors, combined_robot_indices, axis=0)
 
         pcd.points = o3d.utility.Vector3dVector(exclude_robot_points)
         pcd.colors = o3d.utility.Vector3dVector(exclude_robot_colors)
