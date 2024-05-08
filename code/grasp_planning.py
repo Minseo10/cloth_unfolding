@@ -102,57 +102,25 @@ def is_grasp_executable_fn(observation, grasp_pose) -> bool:
 
     return True
 
+
 # modify grasp_hanging_cloth_pose
-# rotate grasps
+# pose: original pose, rotate_ang: rotation angle on z axis (radian)
 def rotate_grasps(
-    position: Vector3DType, approach_direction: Vector3DType, rotate_ang: float, grasp_depth: float = 0.0
-) -> HomogeneousMatrixType:
-    """Create a pose for grasping a hanging cloth.
+    pose: HomogeneousMatrixType, rotate_ang: float, noise_std: float = 0.5
+    ) -> HomogeneousMatrixType:
 
-    Args:
-        position: The position of the grasp.
-        approach_direction: The direction the gripper should approach the grasp from.
-        grasp_depth: An additional forward (= Z) offset for the grasp to bring it deeper into the cloth.
+    # rotated_pose = pose
+    noise = np.random.normal(scale=noise_std)  # (-noise_std, noise_std)
 
-    Returns:
-        pose: The pose for the grasp.
-    """
-    Z = approach_direction / np.linalg.norm(approach_direction)
-    position_with_depth = position + grasp_depth * Z
-
-    # Pointing gripper Y up or down leads to the gripper opening horizontally
-    # I chose Y-down here because it's closer the other poses used in the controllers
-    # Y = np.array([0, 0, -1])  # default Y
-    Y = np.array([0, 0, 1])  # Trying the positive instead to attempt to reduce twisting issue
-
-    # Handle rare case where Z is parallel to default Y
-    if np.abs(np.dot(Y, Z)) > 0.99:
-        Y = np.array([-1, 0, 0])
-
-    X = np.cross(Y, Z)
-    X = X / np.linalg.norm(X)  # Normalize X for the case where Y and Z were not perpendicular
-
-    # Recalculate Y to be guaranteed perpendicular to X and Z
-    Y = np.cross(Z, X)
-    orientation = np.column_stack([X, Y, Z])
-
-    pose = np.identity(4)
-    pose[:3, :3] = orientation
-    pose[:3, 3] = position_with_depth
-
-    # rotate 180
-    # z축 기준으로 rotate_ang만큼 회전하는 행렬 생성
+    # rotate w.r.t z-axis (approach direction)
+    # Add random gaussian noise to x and y axis rotation
     rotation_matrix = np.array([
-        [np.cos(rotate_ang), -np.sin(rotate_ang), 0],
-        [np.sin(rotate_ang), np.cos(rotate_ang), 0],
+        [np.cos(rotate_ang + noise), -np.sin(rotate_ang + noise), 0],
+        [np.sin(rotate_ang + noise), np.cos(rotate_ang + noise), 0],
         [0, 0, 1]
     ])
 
-    # 회전 행렬을 pose의 회전 행렬 부분과 곱하여 rotate_ang만큼 회전
     pose[:3, :3] = np.dot(pose[:3, :3], rotation_matrix)
-
-    return pose
-
 
 
 if __name__ == '__main__':
