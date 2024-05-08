@@ -44,7 +44,7 @@ def extract_edge(pcd: o3d.geometry.PointCloud, output_dir: Path, uniformed=False
 
     pcd_np = np.zeros((len(pcd.points), 6))
 
-    pcd = convert_to_pyntcloud(pcd)
+    pcd = convert_to_pyntcloud(pcd) # rgb 0~1
     # find neighbors
     kdtree_id = pcd.add_structure("kdtree")
     k_neighbors = pcd.get_neighbors(k=k_n, kdtree=kdtree_id)
@@ -89,12 +89,14 @@ def extract_edge(pcd: o3d.geometry.PointCloud, output_dir: Path, uniformed=False
     sigma_value[thresh_min] = 0
     if uniformed:
         thresh_max = sigma_value > thresh
-        sigma_value[thresh_max] = 255
+        # sigma_value[thresh_max] = 255
+        sigma_value[thresh_max] = 1
     else:
         min_val = sigma_value.min()
         max_val = sigma_value.max()
         normalized_arr = (sigma_value - min_val) / (max_val - min_val)
-        sigma_value = (normalized_arr * 255).astype(np.uint8)
+        # sigma_value = (normalized_arr * 255).astype(np.uint8)
+        sigma_value = normalized_arr
 
     pcd_np[:,0] = x
     pcd_np[:,1] = y
