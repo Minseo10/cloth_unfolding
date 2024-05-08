@@ -95,102 +95,54 @@ def rotation_matrix_to_rpy(rotation_matrix):
     return roll, pitch, yaw
 
 
-# annotated grasp pose given by organizer
-def find_best_point_and_approach_direction(root_path, origin_pcd, edge_pcd):
-    # best point selection
-    # 현재는 bring real grasp point from grasp_pose.json
-    grasp_pose_filepath = root_path + "grasp/grasp_pose.json"
-    best_point, grasp_pose = calculate_grasp_point(grasp_pose_filepath)
-
-    points_array = np.asarray(origin_pcd.points)
-    normals_array = np.asarray(origin_pcd.normals)
-    min_dist = 1000000
-    best_point_idx = 0
-
-    for i in range(points_array.shape[0]):
-        dist = np.linalg.norm(points_array[i] - best_point)
-        if dist < min_dist:
-            min_dist = dist
-            best_point_idx = i
-
-    point = points_array[best_point_idx]
-    normal = normals_array[best_point_idx]
-
-    if debug:
-        print("Best point: ", point)
-        print("Normal vector: ", normal)
-
-    return point, normal
-
-
-# sharp edge 위의 점들 중 x 축으로 가장 톡 튀어 나와있는 점을 best point 라고 찾고, 그 점에서의 normal vector 예측값을 grasp direction 으로 찾는 방식
-def find_best_point_and_approach_direction_2(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
-                                             output_dir: Path = None, debug = False):
+# 적당히 뾰족한 점들 중 가장 x 방향으로 카메라와 가까운 점
+def select_best_point_1(edge_pcd : o3d.geometry.PointCloud, output_dir: Path = None, debug = False):
     edge_points = np.asarray(edge_pcd.points).copy()
     point_idx = np.argmin(edge_points[:, 0])  # idx in edge points array
     best_point = edge_points[point_idx]
 
-    # check min x point with blue color
-    # point_colors = np.asarray(edge_pcd.colors)
-    # point_colors[:] = [1, 0, 0]
-
     if debug:
-        color_near_specific_point(
+        debug_pcd = color_near_specific_point(
             np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
             [best_point], [BLUE_COLOR], [0.01]
         )
-
-    if output_dir:
-        o3d.io.write_point_cloud(str(output_dir / "ftn2.ply"), edge_pcd)
-
-    distances = np.linalg.norm(pcd.points - best_point, axis=1)
-    min_distance_index = np.argmin(distances)
-    normal = np.asarray(pcd.normals)[min_distance_index]
-
-    if debug:
-        print("Best point: ", best_point)
-        print("Normal vector: ", normal)
-
-    return best_point, normal
+        if output_dir:
+            output_path = str(output_dir / "best_point_ftn_1.ply")
+            o3d.io.write_point_cloud(output_path, debug_pcd)
+            print(f"{output_path} saved")
 
 
-# 가장 뾰족한 점은 max sigma (red color value) 를 갖고 있고, 상당히 앞에 나와 있는 점들 중 가장 뾰족한 점을 best point 로 선정, grasp direction 은 normal vector
-def find_best_point_and_approach_direction_3(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
-                                             output_dir: Path = None, debug = False):
+    return best_point
+
+
+# 적당히 뾰족한 점들 중 앞에 나와 있는 점을 추린 후 그 중 가장 뾰족한 점을 best point 로 결정
+def select_best_point_2(edge_pcd, output_dir):
     edge_points = np.asarray(edge_pcd.points).copy()
     colors = np.asarray(edge_pcd.colors).copy()
 
-    condition1 = edge_points[:, 0] < np.min(edge_points[:, 0]) + 0.05
-    condition2 = edge_points[:, 1] < np.max(edge_points[:, 1]) - 0.05
-    condition = condition1 & condition2
+    condition = edge_points[:, 0] < np.min(edge_points[:, 0]) + 0.05
     colors[~condition] = [0, 0, 0]
     point_idx = np.argmax(colors[:, 0])
     best_point = edge_points[point_idx]
 
     # check min x point with blue color
     if debug:
-        color_near_specific_point(
+        debug_pcd = color_near_specific_point(
             np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
             [best_point], [BLUE_COLOR], [0.01]
         )
 
-    if output_dir:
-        o3d.io.write_point_cloud(str(output_dir / "ftn3.ply"), edge_pcd)
-
-    distances = np.linalg.norm(pcd.points - best_point, axis=1)
-    min_distance_index = np.argmin(distances)
-    normal = np.asarray(pcd.normals)[min_distance_index]
-
-    if debug:
-        print("Best point: ", best_point)
-        print("Normal vector: ", normal)
-
-    return best_point, normal
+        if output_dir:
+            output_path = str(output_dir / "best_point_ftn_2.ply")
+            o3d.io.write_point_cloud(output_path, debug_pcd)
+            print(f"{output_path} saved")
 
 
-# 적당히 뾰족한 애들 중 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
-def find_best_point_and_approach_direction_4(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
-                                             output_dir: Path = None, debug = False):
+    return best_point
+
+
+# 적당히 뾰족한 애들 중(top 80%) 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
+def select_best_point_3(edge_pcd, output_dir):
     edge_points = np.asarray(edge_pcd.points).copy()
     edge_colors = np.asarray(edge_pcd.colors).copy()
 
@@ -212,69 +164,42 @@ def find_best_point_and_approach_direction_4(pcd : o3d.geometry.PointCloud, edge
 
     # check min x point with blue color
     if debug:
-        color_near_specific_point(
+        debug_pcd = color_near_specific_point(
             np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
             [best_point], [BLUE_COLOR], [0.01]
         )
 
-    if output_dir:
-        o3d.io.write_point_cloud(str(output_dir / "ftn4.ply"), edge_pcd)
+        if output_dir:
+            output_path = str(output_dir / "best_point_ftn_3.ply")
+            o3d.io.write_point_cloud(output_path, debug_pcd)
+            print(f"{output_path} saved")
 
-    distances = np.linalg.norm(pcd.points - best_point, axis=1)
+    return best_point
+
+
+def calculate_normal_vector(pcd, point):
+    # estimate normal vectors
+    pcd.estimate_normals(
+        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
+    )
+
+    # normal vector 옷 바깥쪽으로 뒤집기
+    pcd.orient_normals_consistent_tangent_plane(k=15)
+
+    distances = np.linalg.norm(pcd.points - point, axis=1)
     min_distance_index = np.argmin(distances)
     normal = np.asarray(pcd.normals)[min_distance_index]
 
     if debug:
-        print("Best point: ", best_point)
         print("Normal vector: ", normal)
 
-    return best_point, normal
+    return normal
 
 
-# 적당히 뾰족한 애들 중 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
-def find_best_point_and_approach_direction_5(pcd : o3d.geometry.PointCloud, edge_pcd : o3d.geometry.PointCloud,
-                                             output_dir: Path = None, debug = False):
-    edge_points = np.asarray(edge_pcd.points).copy()
-    edge_colors = np.asarray(edge_pcd.colors).copy()
-
-    sharp_percent = 0.8
-    sharp_cutline = np.min(edge_colors[:, 0]) * sharp_percent + (1 - sharp_percent) * np.max(edge_colors[:, 0])
-    sharp_mask = edge_colors[:, 0] > sharp_cutline
-
-    edge_points = edge_points[sharp_mask]
-    sorted_indices = np.argsort(edge_points[:, 0])
-    sorted_points = edge_points[sorted_indices]
-
-    # x 값이 가장 작은 포인트 추출
-    x_count = 100
-    small_x_points = sorted_points[:x_count]
-
-    # 그 중 z 값이 가장 작은 포인트 추출
-    min_z_index = np.argmin(small_x_points[:, 2])
-    best_point = small_x_points[min_z_index]
-
-    if debug:
-        color_near_specific_point(
-            np.asarray(edge_pcd.points).copy(), np.asarray(edge_pcd.colors).copy(),
-            [best_point], [BLUE_COLOR], [0.01]
-        )
-
-    normal = calculate_normal_from_best_to_mean(pcd, best_point, debug)
-
-    if debug:
-        print("Best point: ", best_point)
-        print("Normal vector: ", normal)
-
-    if output_dir:
-        o3d.io.write_point_cloud(str(output_dir / "ftn5.ply"), edge_pcd)
-
-    return best_point, normal
-
-
-def calculate_normal_from_best_to_mean(pcd, best_point, debug=False):
+def calculate_mean_point_near_specific_point(pcd, specific_point, debug, output_dir):
     pcd_tree = o3d.geometry.KDTreeFlann(pcd)
     # [k, idx, _] = pcd_tree.search_radius_vector_3d(best_point, 0.02)
-    [k, idx, _] = pcd_tree.search_knn_vector_3d(best_point, 2000)
+    [k, idx, _] = pcd_tree.search_knn_vector_3d(specific_point, 3000) # 2000
 
     points = np.asarray(pcd.points).copy()
     colors = np.asarray(pcd.colors).copy()
@@ -285,17 +210,19 @@ def calculate_normal_from_best_to_mean(pcd, best_point, debug=False):
     mean_point = near_points.mean(axis=0)
 
     if debug:
-        color_near_specific_point(
-            # np.asarray(pcd.points).copy(), np.asarray(pcd.colors).copy(),
+        debug_pcd = color_near_specific_point(
             points, colors,
-            [mean_point, best_point],
+            [mean_point, specific_point],
             [RED_COLOR, BLUE_COLOR],
             [0.01, 0.01]
         )
 
-    approach = mean_point - best_point
+        if output_dir:
+            output_path = str(output_dir / "grasp_mean_point.ply")
+            o3d.io.write_point_cloud(output_path, debug_pcd)
+            print(f"{output_path} saved")
 
-    return approach
+    return mean_point
 
 
 # points, colors 매개변수 넘길 때 얕은 복사인지, 깊은 복사인지 주의 깊게 고려하고 사용할 것
@@ -320,7 +247,7 @@ def color_near_specific_point(points, colors, target_points, target_colors, tole
 
     o3d.visualization.draw_geometries([pcd])
 
-    return colors
+    return pcd
 
 
 def convert_to_o3d_pcd(pcd: PointCloud):
@@ -344,8 +271,59 @@ def save_grasp_pose(grasps_dir: str, grasp_pose_fixed: HomogeneousMatrixType) ->
     return grasp_pose_file
 
 
+# normal vs (mean point - grasp point)
+def get_strategies_priorities(sample, processing_dir, debug):
+    grasp_point = select_best_point_3(
+        edge_pcd=sample.processing.edge_point_cloud,
+        output_dir=processing_dir,
+    )
+    mean_point = calculate_mean_point_near_specific_point(
+        pcd=sample.processing.cropped_point_cloud,
+        specific_point=grasp_point,
+        debug=debug,
+        output_dir=processing_dir
+    )
+    approach = mean_point - grasp_point
+    distance = np.linalg.norm(approach)
+    is_inside_point = distance < 0.018
+
+    print(f"distance: {distance}")
+    print(f"is inside point: {is_inside_point}")
+
+    if is_inside_point:
+        priorities = [1, 3, 2, 0] ###### TODO: must check #####
+    else:
+        priorities = [0, 1, 3, 2]
+
+    print(f"priorities: {priorities}")
+    return priorities
+
+
+def visualize_grasp_pose(sample, grasp_pose_fixed, output_path):
+    mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+    mesh.scale(0.1, center=(0, 0, 0))
+    mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
+    o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
+
+    X_W_C = sample.observation.camera_pose_in_world
+    intrinsics = sample.observation.camera_intrinsics
+
+    image_bgr = cv2.cvtColor(sample.observation.image_left, cv2.COLOR_RGB2BGR)
+    draw_pose(image_bgr, grasp_pose_fixed, intrinsics, X_W_C, 0.1)
+    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+    plt.figure(figsize=(10, 5))
+    plt.imshow(image_rgb)
+    plt.title("Example grasp pose")
+
+    plt.savefig(output_path)
+    print(f"{output_path} saved")
+
+    plt.show()
+
+
 if __name__ == '__main__':
-    debug = True
+    debug = False
     from_server = False
     to_server = False
     start_time = time.time()
@@ -361,10 +339,11 @@ if __name__ == '__main__':
         sample_dir = Path(observation_dir + "/../")
 
     else:
-        sample_id = f"sample_{'{0:06d}'.format(1)}"
+        sample_id = f"sample_{'{0:06d}'.format(2)}"
         sample_dir = Path(f"../datasets/cloth_competition_dataset_0001/{sample_id}")
         observation_dir = sample_dir / "observation_start"
 
+    print(f">>> processing {sample_dir}")
     middle_time = time.time()
 
     sample = Sample(
@@ -414,125 +393,75 @@ if __name__ == '__main__':
     if debug:
         o3d.visualization.draw_geometries([edge_pointcloud])
 
-    # estimate normal vectors
-    sample.processing.cropped_point_cloud.estimate_normals(
-        search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
-    )
-
-    # normal vector 옷 바깥쪽으로 뒤집기
-    sample.processing.cropped_point_cloud.orient_normals_consistent_tangent_plane(k=15)
-
-    point = None
-    approach = None
-
-    priority = [5, 4, 3, 2]
     is_success = False
     rotation = False
+    priorities = get_strategies_priorities(sample, processing_dir=None, debug=False)
+    grasp_pose_fixed = None
 
     while (not is_success):
-        ftn = priority.pop(0)
-        print(f"{ftn}번째 방법을 사용합니다.")
+        strategy = priorities.pop(0)
+        print(f"{strategy}번째 방법을 사용합니다.")
 
-        ## dry-run comment
-        # approach direction 은 계산값을 쓰고 x, y 방향을 rotation 하여 init grasp pose 와 비슷한 것을 고르면
-        # motion planning 에서 덜 실패할 것이다
-        match ftn:
+        match strategy:
+            case 0:
+                grasp_point = select_best_point_3(
+                    edge_pcd=sample.processing.edge_point_cloud,
+                    output_dir=processing_dir,
+                )
+                mean_point = calculate_mean_point_near_specific_point(
+                    pcd = sample.processing.cropped_point_cloud,
+                    specific_point = grasp_point,
+                    debug = debug,
+                    output_dir = processing_dir,
+                )
+                approach = mean_point - grasp_point
+
+            case 1:
+                grasp_point = select_best_point_3(
+                    edge_pcd=sample.processing.edge_point_cloud,
+                    output_dir=processing_dir,
+                )
+                approach = calculate_normal_vector(
+                    pcd=sample.processing.cropped_point_cloud,
+                    point=grasp_point,
+                )
+
             case 2:
-                # find corresponding point in point cloud
-                point, approach = find_best_point_and_approach_direction_2(
-                    pcd = sample.processing.cropped_point_cloud,
+                grasp_point = select_best_point_2(
                     edge_pcd = sample.processing.edge_point_cloud,
                     output_dir = processing_dir,
-                    debug = debug,
                 )
+                approach = calculate_normal_vector(
+                    pcd = sample.processing.cropped_point_cloud,
+                    point = grasp_point,
+                )
+
             case 3:
-                point, approach = find_best_point_and_approach_direction_3(
-                    pcd = sample.processing.cropped_point_cloud,
-                    edge_pcd = sample.processing.edge_point_cloud,
-                    output_dir = processing_dir,
-                    debug = debug,
-                )
-            case 4:
-                # tshirt OK OK / towel No / towel ok / tshirt 가장자리 못 잡음
-                point, approach = find_best_point_and_approach_direction_4(
-                    pcd=sample.processing.cropped_point_cloud,
+                grasp_point = select_best_point_1(
                     edge_pcd=sample.processing.edge_point_cloud,
                     output_dir=processing_dir,
-                    debug=debug,
                 )
-            case 5:
-                # tshirt no / towel ok / towel no
-                point, approach = find_best_point_and_approach_direction_5(
+                approach = calculate_normal_vector(
                     pcd=sample.processing.cropped_point_cloud,
-                    edge_pcd=sample.processing.edge_point_cloud,
-                    output_dir=processing_dir,
-                    debug=debug,
-                )
-            case _:
-                point, approach = find_best_point_and_approach_direction_5(
-                    pcd=sample.processing.cropped_point_cloud,
-                    edge_pcd=sample.processing.edge_point_cloud,
-                    output_dir=processing_dir,
-                    debug=debug,
+                    point=grasp_point,
                 )
 
-        # grasp direction (vector) -> grasp pose (rpy)
-        # Calculate world frame's z-axis in camera frame
-        z_axis_world = np.array([0, 0, 1])
-        plane_normal = np.cross(z_axis_world, approach)
-        aligned_normal = np.cross(z_axis_world, plane_normal)
-        grasp_z = aligned_normal / np.linalg.norm(aligned_normal)
-        grasp_y = z_axis_world
-        grasp_y = (-1) * grasp_y
-        grasp_x = np.cross(grasp_y, grasp_z)
-        grasp_x /= np.linalg.norm(grasp_x)
+        # calculate grasp pose fixed
+        if strategy == 0:
+            grasp_pose_fixed = grasp_hanging_cloth_pose(grasp_point, approach, 0.07)
 
-        # # add grasp depth (0.5cm)
-        # point = point + grasp_z * 0.005
-        #
-        # # grasp pose w.r.t world frame
-        # grasp_R = [[grasp_x[0], grasp_y[0], grasp_z[0]], [grasp_x[1], grasp_y[1], grasp_z[1]], [grasp_x[2], grasp_y[2], grasp_z[2]]]
-        # T = np.eye(4)
-        # T[:3, :3] = grasp_R
-        # T[0, 3] = point[0]
-        # T[1, 3] = point[1]
-        # T[2, 3] = point[2]
-        # mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
-        # mesh.scale(0.1, center=(0,0,0))
-        # mesh = copy.deepcopy(mesh).transform(T)
-        #
-        # # print grasp pose
-        # roll, pitch, yaw = rotation_matrix_to_rpy(grasp_R)
-        #
-        # print("X (meters):", point[0])
-        # print("Y (meters):", point[1])
-        # print("Z (meters):", point[2])
-        # print("Roll (radians):", roll)
-        # print("Pitch (radians):", pitch)
-        # print("Yaw (radians):", yaw)
-        #
-        # if debug:
-        #     print("Roll (radians):", roll)
-        #     print("Pitch (radians):", pitch)
-        #     print("Yaw (radians):", yaw)
-
-        # visualize grasp pose at the grasp point
-        # start_point = point.tolist()
-        # end_point = (point + 0.1 * normal).tolist()
-        #
-        # line_set = o3d.geometry.LineSet(
-        #     points=o3d.utility.Vector3dVector([start_point, end_point]),
-        #     lines=o3d.utility.Vector2iVector([[0, 1]]),
-        # )
-        # line_set.colors = o3d.utility.Vector3dVector([[1, 0, 0]])
-        # line_set_line_width = 4
-
-
-        match ftn:
-            case 5:
-                grasp_pose_fixed = grasp_hanging_cloth_pose(point, approach, 0.07)
-            case _:
-                grasp_pose_fixed = grasp_hanging_cloth_pose(point, grasp_z, 0.07)
+        else:
+            # grasp direction (vector) -> grasp pose (rpy)
+            # Calculate world frame's z-axis in camera frame
+            z_axis_world = np.array([0, 0, 1])
+            plane_normal = np.cross(z_axis_world, approach)
+            aligned_normal = np.cross(z_axis_world, plane_normal)
+            grasp_z = aligned_normal / np.linalg.norm(aligned_normal)
+            grasp_y = z_axis_world
+            grasp_y = (-1) * grasp_y
+            grasp_x = np.cross(grasp_y, grasp_z)
+            grasp_x /= np.linalg.norm(grasp_x)
+            grasp_pose_fixed = grasp_hanging_cloth_pose(grasp_point, grasp_z, 0.07)
 
         # check motion planning
         planning = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
@@ -541,12 +470,13 @@ if __name__ == '__main__':
             print("Planning succeed!")
             print("Grasp pose is ", grasp_pose_fixed)
             is_success = True
+            rotation = False
+
         else:
             print("Planning failed!")
             print("Grasp pose is ", grasp_pose_fixed)
 
             # rotate grasps and check planning again
-            rotation = True
             rotated_pose_1 = grasp_pose_fixed.copy()
             gp.rotate_grasps(rotated_pose_1, 0, 0.5)
 
@@ -569,60 +499,41 @@ if __name__ == '__main__':
             print("Planning results: ", planning_results)
 
             first_true_index = planning_results.index(True) if True in planning_results else -1
+
             if first_true_index == -1:  # planning failed
                 first_true_pose = None
+
                 print("Planning failed!")
+
                 is_success = False
+                rotation = True
+
             else:  # planning ok
                 first_true_pose = [rotated_pose_1, rotated_pose_2, rotated_pose_3, rotated_pose_4][first_true_index]
                 grasp_pose_fixed = first_true_pose
+
                 print("Planning succeed!")
                 print("Grasp pose is ", grasp_pose_fixed)
+
                 is_success = True
+                rotation = True
 
 
-    # open 3d visualize
-    if debug:
-        mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
-        mesh.scale(0.1, center=(0,0,0))
-        mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
-        o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
-        # rotated grasps
-        if rotation:
-            mesh1 = o3d.geometry.TriangleMesh.create_coordinate_frame()
-            mesh1.scale(0.1, center=(0, 0, 0))
-            mesh1 = copy.deepcopy(mesh1).transform(rotated_pose_1)
-            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh1])
+        # open 3d visualize
+        if debug:
+            if rotation:
+                visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_{strategy}.png")
 
-            mesh2 = o3d.geometry.TriangleMesh.create_coordinate_frame()
-            mesh2.scale(0.1, center=(0, 0, 0))
-            mesh2 = copy.deepcopy(mesh2).transform(rotated_pose_2)
-            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh2])
-
-            mesh3 = o3d.geometry.TriangleMesh.create_coordinate_frame()
-            mesh3.scale(0.1, center=(0, 0, 0))
-            mesh3 = copy.deepcopy(mesh3).transform(rotated_pose_3)
-            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh3])
-
-            mesh4 = o3d.geometry.TriangleMesh.create_coordinate_frame()
-            mesh4.scale(0.1, center=(0, 0, 0))
-            mesh4 = copy.deepcopy(mesh4).transform(rotated_pose_4)
-            o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh4])
+                # rotated grasps
+                visualize_grasp_pose(sample, rotated_pose_1, processing_dir / f"grasp_pose_{strategy}_1.png")
+                visualize_grasp_pose(sample, rotated_pose_2, processing_dir / f"grasp_pose_{strategy}_2.png")
+                visualize_grasp_pose(sample, rotated_pose_3, processing_dir / f"grasp_pose_{strategy}_3.png")
+                visualize_grasp_pose(sample, rotated_pose_4, processing_dir / f"grasp_pose_{strategy}_4.png")
+            else:
+                visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_{strategy}.png")
 
 
-    X_W_C = sample.observation.camera_pose_in_world
-    intrinsics = sample.observation.camera_intrinsics
-
-    image_bgr = cv2.cvtColor(sample.observation.image_left, cv2.COLOR_RGB2BGR)
-    draw_pose(image_bgr, grasp_pose_fixed, intrinsics, X_W_C, 0.1)
-    image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-
-    if debug:
-        plt.figure(figsize=(10, 5))
-        plt.imshow(image_rgb)
-        plt.title("Example grasp pose")
-        plt.show()
-
+    # save
     grasps_dir = f"data/grasps_{sample_id}"
     grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
 
