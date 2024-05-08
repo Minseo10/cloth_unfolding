@@ -56,7 +56,16 @@ def contour(binary_image: NumpyIntImageType, output_dir: Path, debug: bool = Fal
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    image = (binary_image * 255).astype(np.uint8)
+    height = binary_image.shape[0]
+    width = binary_image.shape[1]
+
+    image = np.zeros((height, width), dtype=binary_image.dtype)
+
+    min_width = int(width * 0.2)
+    max_width = int(width * 0.8)
+
+    # 좌우 자르기 (모니터가 옷으로 검출되는 경우가 있음 dataset0/sample65)
+    image[:, min_width:max_width] = (binary_image * 255).astype(np.uint8)[:, min_width:max_width]
 
     contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -75,7 +84,7 @@ def contour(binary_image: NumpyIntImageType, output_dir: Path, debug: bool = Fal
     x, y, w, h = largest_bbox_coordinates
     cv2.rectangle(image_with_bbox, (x, y), (x + w, y + h), (0, 0, 255), 2)
 
-    cv2.imwrite(str(output_dir / "original_with_bbox.jpg.jpg"), image_with_bbox)
+    cv2.imwrite(str(output_dir / "original_with_bbox.jpg"), image_with_bbox)
 
     return largest_bbox_coordinates
 
