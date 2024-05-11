@@ -144,7 +144,7 @@ def select_best_point_1(edge_pcd : o3d.geometry.PointCloud, output_dir: Path = N
 
 
 # 적당히 뾰족한 애들 중(top 80%) 제일 앞에 튀어나와 있는 점 100개를 추리고 그 중 가장 밑에 있는 점 찾기
-def select_best_point_3(edge_pcd, output_dir):
+def select_best_point_3(min_x, max_x, edge_pcd, output_dir):
     edge_points = np.asarray(edge_pcd.points).copy()
     edge_colors = np.asarray(edge_pcd.colors).copy()
 
@@ -156,9 +156,8 @@ def select_best_point_3(edge_pcd, output_dir):
     sorted_indices = np.argsort(edge_points[:, 0])
     sorted_points = edge_points[sorted_indices]
 
-    # x 값이 가장 작은 포인트 추출
-    x_count = 100
-    small_x_points = sorted_points[:x_count]
+    # x 값이 해당 범위 안에 있는 포인트 추출
+    small_x_points = sorted_points[min_x:max_x]
 
     # 그 중 z 값이 가장 작은 포인트 추출
     min_z_index = np.argmin(small_x_points[:, 2])
@@ -317,32 +316,32 @@ def save_grasp_pose(grasps_dir: str, grasp_pose_fixed: HomogeneousMatrixType) ->
     return grasp_pose_file
 
 
-# normal vs (mean point - grasp point)
-def get_strategies_priorities(sample, processing_dir, debug):
-    grasp_point = select_best_point_3(
-        edge_pcd=sample.processing.edge_point_cloud,
-        output_dir=processing_dir,
-    )
-    mean_point = calculate_mean_point_near_specific_point(
-        pcd=sample.processing.cropped_point_cloud,
-        specific_point=grasp_point,
-        debug=debug,
-        output_dir=processing_dir
-    )
-    approach = mean_point - grasp_point
-    distance = np.linalg.norm(approach)
-    is_inside_point = distance < 0.018
-
-    print(f"distance: {distance}")
-    print(f"is inside point: {is_inside_point}")
-
-    if is_inside_point:
-        priorities = [1, 3, 2, 0] ###### TODO: must check #####
-    else:
-        priorities = [0, 1, 3, 2]
-
-    print(f"priorities: {priorities}")
-    return priorities
+# # normal vs (mean point - grasp point)
+# def get_strategies_priorities(sample, processing_dir, debug):
+#     grasp_point = select_best_point_3(
+#         edge_pcd=sample.processing.edge_point_cloud,
+#         output_dir=processing_dir,
+#     )
+#     mean_point = calculate_mean_point_near_specific_point(
+#         pcd=sample.processing.cropped_point_cloud,
+#         specific_point=grasp_point,
+#         debug=debug,
+#         output_dir=processing_dir
+#     )
+#     approach = mean_point - grasp_point
+#     distance = np.linalg.norm(approach)
+#     is_inside_point = distance < 0.018
+#
+#     print(f"distance: {distance}")
+#     print(f"is inside point: {is_inside_point}")
+#
+#     if is_inside_point:
+#         priorities = [1, 3, 2, 0] ###### TODO: must check #####
+#     else:
+#         priorities = [0, 1, 3, 2]
+#
+#     print(f"priorities: {priorities}")
+#     return priorities
 
 
 def visualize_grasp_pose(sample, grasp_pose_fixed, output_path):
@@ -368,8 +367,98 @@ def visualize_grasp_pose(sample, grasp_pose_fixed, output_path):
     plt.show()
 
 
+def method1(x_offset, sample, processing_dir, debug):
+    print('method1 is selected.')
+    grasp_point = select_best_point_3(
+        min_x=x_offset, max_x=x_offset+100,
+        edge_pcd=sample.processing.edge_point_cloud,
+        output_dir=processing_dir
+    )
+
+    mean_point = calculate_mean_point_near_specific_point(
+        pcd=sample.processing.cropped_point_cloud,
+        specific_point=grasp_point,
+        debug=debug,
+        output_dir=processing_dir
+    )
+
+    approach = mean_point - grasp_point
+    distance = np.linalg.norm(approach)
+    is_inside_point = distance < 0.018
+    grasp_pose_fixed = None
+
+    print(f"distance: {distance}")
+    print(f"is inside point: {is_inside_point}")
+
+    if is_inside_point:
+        approach = calculate_normal_vector(
+            pcd=sample.processing.cropped_point_cloud,
+            point=grasp_point,
+        )
+
+        # grasp direction (vector) -> grasp pose (rpy)
+        # Calculate world frame's z-axis in camera frame
+        z_axis_world = np.array([0, 0, 1])
+        plane_normal = np.cross(z_axis_world, approach)
+        aligned_normal = np.cross(z_axis_world, plane_normal)
+        grasp_z = aligned_normal / np.linalg.norm(aligned_normal)
+        grasp_y = z_axis_world
+        grasp_y = (-1) * grasp_y
+        grasp_x = np.cross(grasp_y, grasp_z)
+        grasp_x /= np.linalg.norm(grasp_x)
+
+        grasp_pose_fixed = grasp_hanging_cloth_pose(grasp_point, grasp_z, 0.07)
+
+    else:
+        approach = mean_point - grasp_point
+        grasp_pose_fixed = grasp_hanging_cloth_pose(grasp_point, approach, 0.07)
+
+    return grasp_pose_fixed
+
+
+def method2(sample, processing_dir, debug):
+    print('method2 is selected.')
+    grasp_point = select_best_point_1(
+        edge_pcd=sample.processing.edge_point_cloud,
+        output_dir=processing_dir,
+        debug=debug
+    )
+
+    mean_point = calculate_mean_point_near_specific_point(
+        pcd=sample.processing.cropped_point_cloud,
+        specific_point=grasp_point,
+        debug=debug,
+        output_dir=processing_dir
+    )
+
+    tuning_vector = mean_point - grasp_point
+    distance = np.linalg.norm(tuning_vector)
+    is_inside_point = distance < 0.018
+
+    print(f"distance: {distance}")
+    print(f"is inside point: {is_inside_point}")
+
+    if not is_inside_point:
+        tuning_vector = tuning_vector / np.linalg.norm(tuning_vector)
+        tuning_scale = 0.02
+
+        debug = True
+        if debug:
+            point_1 = grasp_point
+            point_2 = grasp_point + tuning_vector * tuning_scale
+
+            mesh1 = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=point_1)
+            mesh2 = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=point_2)
+            o3d.visualization.draw_geometries([sample.processing.edge_point_cloud, mesh1, mesh2])
+
+        grasp_point += tuning_vector * tuning_scale
+
+    approach = np.asarray([1, 0, 0])
+    return grasp_hanging_cloth_pose(grasp_point, approach, 0.07)
+
+
 if __name__ == '__main__':
-    debug = True
+    debug = False
     from_server = False
     to_server = False
     start_time = time.time()
@@ -439,103 +528,22 @@ if __name__ == '__main__':
     if debug:
         o3d.visualization.draw_geometries([edge_pointcloud])
 
-    grasp_points = select_best_two_point(
-        edge_pcd=sample.processing.edge_point_cloud,
-        output_dir=processing_dir,
-    )
-
     idx = 1
+    x_offset = 0
     grasp_pose_fixed = None
     is_success = None
 
-    while grasp_points:
-        grasp_point = grasp_points.pop(0)
-
-        mean_point = calculate_mean_point_near_specific_point(
-            pcd=sample.processing.cropped_point_cloud,
-            specific_point=grasp_point,
-            debug=debug,
-            output_dir=processing_dir
-        )
-        approach = mean_point - grasp_point
-        distance = np.linalg.norm(approach)
-        is_inside_point = distance < 0.018
-
-        print(f"distance: {distance}")
-        print(f"is inside point: {is_inside_point}")
-
-        if is_inside_point:
-            approach = calculate_normal_vector(
-                pcd=sample.processing.cropped_point_cloud,
-                point=grasp_point,
-            )
-
-            # grasp direction (vector) -> grasp pose (rpy)
-            # Calculate world frame's z-axis in camera frame
-            z_axis_world = np.array([0, 0, 1])
-            plane_normal = np.cross(z_axis_world, approach)
-            aligned_normal = np.cross(z_axis_world, plane_normal)
-            grasp_z = aligned_normal / np.linalg.norm(aligned_normal)
-            grasp_y = z_axis_world
-            grasp_y = (-1) * grasp_y
-            grasp_x = np.cross(grasp_y, grasp_z)
-            grasp_x /= np.linalg.norm(grasp_x)
-
-            grasp_pose_fixed = grasp_hanging_cloth_pose(grasp_point, grasp_z, 0.07)
-
+    while True:
+        if idx == 1 or idx == 2 or idx % 2 == 0:
+            grasp_pose_fixed = method1(x_offset, sample, processing_dir, debug)
+            x_offset += 300
         else:
-            mean_point = calculate_mean_point_near_specific_point(
-                pcd=sample.processing.cropped_point_cloud,
-                specific_point=grasp_point,
-                debug=debug,
-                output_dir=processing_dir,
-            )
-            approach = mean_point - grasp_point
-            grasp_pose_fixed = grasp_hanging_cloth_pose(grasp_point, approach, 0.07)
+            grasp_pose_fixed = method2(sample, processing_dir, debug)
 
         # check motion planning
         is_success = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
 
         if not is_success:
-            for angle_idx, angle in enumerate([0, np.pi/2, np.pi, 3*np.pi/2]):
-                print(f"grasp_pose_fixed: \n{grasp_pose_fixed}")
-                rotated_pose = grasp_pose_fixed.copy()
-
-                gp.rotate_grasps(rotated_pose, angle, 0.5)
-                print(f"rotated_pose_{angle_idx}: \n{rotated_pose}")
-
-                if gp.is_grasp_executable_fn(sample.observation, rotated_pose):
-                    is_success = True
-
-                else:
-                    is_success = False
-                    if debug:
-                        visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_failed_{idx}_{angle_idx}.png")
-
-        if is_success:
-            print("Planning succeed!")
-            print("Grasp pose is ", grasp_pose_fixed)
-            visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_success_{idx}.png")
-            break
-
-        else:
-            idx = idx + 1
-
-    # nearest-x, x 방향 디렉션 - 최후의 보루
-    if not is_success:
-        grasp_point = select_best_point_1(
-            edge_pcd = sample.processing.edge_point_cloud,
-            output_dir = processing_dir,
-            debug = debug
-        )
-        approach = np.asarray([1, 0, 0])
-        grasp_pose_fixed = grasp_hanging_cloth_pose(grasp_point, approach, 0.07)
-
-        is_success = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
-
-        if is_success:
-            visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_success.png")
-        else:
             for angle_idx, angle in enumerate([0, np.pi / 2, np.pi, 3 * np.pi / 2]):
                 print(f"grasp_pose_fixed: \n{grasp_pose_fixed}")
                 rotated_pose = grasp_pose_fixed.copy()
@@ -549,7 +557,16 @@ if __name__ == '__main__':
                 else:
                     is_success = False
                     if debug:
-                        visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_failed_{idx}_{angle_idx}.png")
+                        visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_failed_idx{idx}_angle{angle_idx}.png")
+
+        if is_success:
+            print("Planning succeed!")
+            print("Grasp pose is ", grasp_pose_fixed)
+            visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_success_idx{idx}.png")
+            break
+
+        idx = idx + 1
+
 
     # save
     grasps_dir = f"data/grasps_{sample_id}"
