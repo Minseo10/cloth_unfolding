@@ -99,6 +99,8 @@ def is_grasp_executable_fn(observation, grasp_pose) -> bool:
         print(f"You can see the trajectory animation at: {scene_with_cloth.meshcat.web_url()}")
     except ExhaustedOptionsError:
         return False
+    except AssertionError:
+        return False
 
     return True
 
