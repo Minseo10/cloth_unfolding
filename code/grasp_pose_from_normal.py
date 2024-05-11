@@ -40,6 +40,8 @@ RED_COLOR = np.array([1, 0, 0])
 GREEN_COLOR = np.array([0, 1, 0])
 BLUE_COLOR = np.array([0, 0, 1])
 
+logfile = f"log_{datetime.now().strftime('%H_%M_%S')}.txt"
+
 @dataclass
 class ProcessingData:
     segmented_img: NumpyIntImageType
@@ -95,6 +97,13 @@ def rotation_matrix_to_rpy(rotation_matrix):
     yaw = np.arctan2(rotation_matrix[1][0], rotation_matrix[0][0])
 
     return roll, pitch, yaw
+
+
+def print_console_and_file(msg, output_dir):
+    print(msg)
+    with open(output_dir / logfile, 'a') as f:
+        f.write(msg)
+        f.write('\n')
 
 
 # 적당히 뾰족한 점들 중 가장 x 방향으로 카메라와 가까운 점
@@ -220,7 +229,7 @@ def select_best_two_point(edge_pcd, output_dir):
     return best_points
 
 
-def calculate_normal_vector(pcd, point):
+def calculate_normal_vector(pcd, point, output_dir):
     # estimate normal vectors
     pcd.estimate_normals(
         search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30)
@@ -234,7 +243,7 @@ def calculate_normal_vector(pcd, point):
     normal = np.asarray(pcd.normals)[min_distance_index]
 
     if debug:
-        print("Normal vector: ", normal)
+        print_console_and_file(f"Normal vector: {normal}", output_dir)
 
     return normal
 
@@ -263,7 +272,7 @@ def calculate_mean_point_near_specific_point(pcd, specific_point, debug, output_
         if output_dir:
             output_path = str(output_dir / f"grasp_mean_point_{datetime.now().strftime('%H_%M_%S')}.ply")
             o3d.io.write_point_cloud(output_path, debug_pcd)
-            print(f"{output_path} saved")
+            print_console_and_file(f"{output_path} saved", output_dir)
 
     return mean_point
 
@@ -363,14 +372,15 @@ def visualize_grasp_pose(sample, grasp_pose_fixed, output_path, debug):
     plt.imshow(image_rgb)
     plt.title("Example grasp pose")
 
-    plt.savefig(output_path)
-    print(f"{output_path} saved")
+    if output_path:
+        plt.savefig(output_path)
+        print(f"{output_path} saved")
 
     plt.show()
 
 
 def method1(x_offset, sample, processing_dir, debug):
-    print('method1 is selected.')
+    print_console_and_file('method1 is selected.', processing_dir)
     grasp_point = select_best_point_3(
         min_x=x_offset, max_x=x_offset+100,
         edge_pcd=sample.processing.edge_point_cloud,
@@ -389,13 +399,14 @@ def method1(x_offset, sample, processing_dir, debug):
     is_inside_point = distance < 0.018
     grasp_pose_fixed = None
 
-    print(f"distance: {distance}")
-    print(f"is inside point: {is_inside_point}")
+    print_console_and_file(f"distance: {distance}", processing_dir)
+    print_console_and_file(f"is inside point: {is_inside_point}", processing_dir)
 
     if is_inside_point:
         approach = calculate_normal_vector(
             pcd=sample.processing.cropped_point_cloud,
             point=grasp_point,
+            output_dir=processing_dir
         )
 
         # grasp direction (vector) -> grasp pose (rpy)
@@ -419,7 +430,7 @@ def method1(x_offset, sample, processing_dir, debug):
 
 
 def method2(sample, processing_dir, debug):
-    print('method2 is selected.')
+    print_console_and_file('method2 is selected.', processing_dir)
     grasp_point = select_best_point_1(
         edge_pcd=sample.processing.edge_point_cloud,
         output_dir=processing_dir,
@@ -437,8 +448,8 @@ def method2(sample, processing_dir, debug):
     distance = np.linalg.norm(tuning_vector)
     is_inside_point = distance < 0.018
 
-    print(f"distance: {distance}")
-    print(f"is inside point: {is_inside_point}")
+    print_console_and_file(f"distance: {distance}", processing_dir)
+    print_console_and_file(f"is inside point: {is_inside_point}", processing_dir)
 
     if not is_inside_point:
         tuning_vector = tuning_vector / np.linalg.norm(tuning_vector)
@@ -462,121 +473,124 @@ if __name__ == '__main__':
     debug = False
     from_server = False
     to_server = False
-    start_time = time.time()
 
-    server_url = "https://robotlab.ugent.be"
+    for i in range(500):
+        start_time = time.time()
 
-    # download input files
-    if from_server:
-        data_dir = Path("../datasets")
-        dataset_dir = data_dir / "downloaded_dataset_0000"
+        server_url = "https://robotlab.ugent.be"
 
-        observation_dir, sample_id = download_latest_observation(dataset_dir, server_url)
-        sample_dir = Path(observation_dir + "/../")
+        # download input files
+        if from_server:
+            data_dir = Path("../datasets")
+            dataset_dir = data_dir / "downloaded_dataset_0000"
 
-    else:
-        sample_id = f"sample_{'{0:06d}'.format(1)}"
-        sample_dir = Path(f"../datasets/cloth_competition_dataset_0000/{sample_id}")
-        observation_dir = sample_dir / "observation_start"
+            observation_dir, sample_id = download_latest_observation(dataset_dir, server_url)
+            sample_dir = Path(observation_dir + "/../")
 
-    print(f">>> processing {sample_dir}")
-    middle_time = time.time()
-
-    sample = Sample(
-        observation=load_competition_observation(observation_dir),
-        processing=ProcessingData(
-            segmented_img=None,
-            cloth_bbox=None,
-            cropped_point_cloud=None,
-            edge_point_cloud=None,
-        )
-    )
-
-    # cloth segmentation
-    processing_dir = sample_dir / "processing"
-    mask = seg.segmentation(image=sample.observation.image_left, output_dir=processing_dir)
-    sample.processing.segmented_img = mask
-
-    if debug:
-        plt.imshow(sample.processing.segmented_img)
-        plt.title("Segmentation image from left observation rgb-d image")
-        plt.show()
-
-    # segmentation 이미지 중 가장 면적이 넓은 부분이 진짜 옷임. 그 bbox 를 찾아서
-    cloth_bbox = seg.contour(binary_image=mask, output_dir=processing_dir, debug=debug)
-    sample.processing.cloth_bbox = cloth_bbox
-
-    # 그 bbox 를 이용해서 point cloud 를 crop 한다.
-    cropped_point_cloud = seg.crop(
-        bbox_coordinates = cloth_bbox,
-        depth_image = sample.observation.depth_image,
-        camera_intrinsics = sample.observation.camera_intrinsics,
-        camera_extrinsic = sample.observation.camera_pose_in_world,
-        point_cloud = sample.observation.point_cloud,
-        output_dir = processing_dir,
-        debug = debug
-    )
-    sample.processing.cropped_point_cloud = cropped_point_cloud
-
-    # edge extraction
-    edge_pointcloud = de.extract_edge(
-        pcd = sample.processing.cropped_point_cloud,
-        output_dir = processing_dir,
-        uniformed = False,
-    )  # from Difference_Eigenvalues.py
-    sample.processing.edge_point_cloud = edge_pointcloud
-
-    if debug:
-        o3d.visualization.draw_geometries([edge_pointcloud])
-
-    idx = 1
-    x_offset = 0
-    grasp_pose_fixed = None
-    is_success = None
-
-    while True:
-        if idx == 1 or idx == 2 or idx % 2 == 0:
-            grasp_pose_fixed = method1(x_offset, sample, processing_dir, debug)
-            x_offset += 300
         else:
-            grasp_pose_fixed = method2(sample, processing_dir, debug)
+            sample_id = f"sample_{'{0:06d}'.format(i)}"
+            sample_dir = Path(f"../datasets/cloth_competition_dataset_0000/{sample_id}")
+            observation_dir = sample_dir / "observation_start"
 
-        # check motion planning
-        is_success = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
+        print(f">>> processing {sample_dir}")
+        middle_time = time.time()
 
-        if not is_success:
-            for angle_idx, angle in enumerate([0, np.pi / 2, np.pi, 3 * np.pi / 2]):
-                print(f"grasp_pose_fixed: \n{grasp_pose_fixed}")
-                rotated_pose = grasp_pose_fixed.copy()
+        sample = Sample(
+            observation=load_competition_observation(observation_dir),
+            processing=ProcessingData(
+                segmented_img=None,
+                cloth_bbox=None,
+                cropped_point_cloud=None,
+                edge_point_cloud=None,
+            )
+        )
 
-                gp.rotate_grasps(rotated_pose, angle, 0.5)
-                print(f"rotated_pose_{angle_idx}: \n{rotated_pose}")
+        # cloth segmentation
+        processing_dir = sample_dir / "processing"
 
-                if gp.is_grasp_executable_fn(sample.observation, rotated_pose):
-                    is_success = True
-                    grasp_pose_fixed = rotated_pose
+        mask = seg.segmentation(image=sample.observation.image_left, output_dir=processing_dir)
+        sample.processing.segmented_img = mask
 
-                else:
-                    is_success = False
-                    visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_failed_idx{idx}_angle{angle_idx}.png", debug)
+        if debug:
+            plt.imshow(sample.processing.segmented_img)
+            plt.title("Segmentation image from left observation rgb-d image")
+            plt.show()
 
-        if is_success:
-            print("Planning succeed!")
-            print("Grasp pose is ", grasp_pose_fixed)
-            visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_success_idx{idx}.png", debug)
-            break
+        # segmentation 이미지 중 가장 면적이 넓은 부분이 진짜 옷임. 그 bbox 를 찾아서
+        cloth_bbox = seg.contour(binary_image=mask, output_dir=processing_dir, debug=debug)
+        sample.processing.cloth_bbox = cloth_bbox
 
-        idx = idx + 1
+        # 그 bbox 를 이용해서 point cloud 를 crop 한다.
+        cropped_point_cloud = seg.crop(
+            bbox_coordinates = cloth_bbox,
+            depth_image = sample.observation.depth_image,
+            camera_intrinsics = sample.observation.camera_intrinsics,
+            camera_extrinsic = sample.observation.camera_pose_in_world,
+            point_cloud = sample.observation.point_cloud,
+            output_dir = processing_dir,
+            debug = debug
+        )
+        sample.processing.cropped_point_cloud = cropped_point_cloud
 
-    # save
-    grasps_dir = f"data/grasps_{sample_id}"
-    grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
+        # edge extraction
+        edge_pointcloud = de.extract_edge(
+            pcd = sample.processing.cropped_point_cloud,
+            output_dir = processing_dir,
+            uniformed = False,
+        )  # from Difference_Eigenvalues.py
+        sample.processing.edge_point_cloud = edge_pointcloud
 
-    if to_server:
-        upload_grasp(grasp_pose_file, "Ewha Glab", sample_id, server_url)
+        if debug:
+            o3d.visualization.draw_geometries([edge_pointcloud])
 
-    end_time = time.time()
-    download_time = middle_time - start_time
-    execution_time = end_time - start_time
-    print(f"다운로 시간: {download_time:.6f}초")
-    print(f"코드 실행 시간: {execution_time:.6f}초")
+        idx = 1
+        x_offset = 0
+        grasp_pose_fixed = None
+        is_success = None
+
+        while True:
+            if idx == 1 or idx == 2 or idx % 2 == 0:
+                grasp_pose_fixed = method1(x_offset, sample, processing_dir, debug)
+                x_offset += 300
+            else:
+                grasp_pose_fixed = method2(sample, processing_dir, debug)
+
+            # check motion planning
+            is_success = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
+
+            if not is_success:
+                for angle_idx, angle in enumerate([0, np.pi / 2, np.pi, 3 * np.pi / 2]):
+                    print_console_and_file(f"grasp_pose_fixed: \n{grasp_pose_fixed}", processing_dir)
+                    rotated_pose = grasp_pose_fixed.copy()
+
+                    gp.rotate_grasps(rotated_pose, angle, 0.5)
+                    print_console_and_file(f"rotated_pose_{angle_idx}: \n{rotated_pose}", processing_dir)
+
+                    if gp.is_grasp_executable_fn(sample.observation, rotated_pose):
+                        is_success = True
+                        grasp_pose_fixed = rotated_pose
+
+                    else:
+                        is_success = False
+                        visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_failed_idx{idx}_angle{angle_idx}.png", debug)
+    
+            if is_success:
+                print_console_and_file(f"Planning succeed!: {processing_dir}", processing_dir)
+                print_console_and_file(f"Grasp pose is {grasp_pose_fixed}", processing_dir)
+                visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_success_idx{idx}.png", debug)
+                break
+
+            idx = idx + 1
+
+        # save
+        grasps_dir = f"data/grasps_{sample_id}"
+        grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
+
+        if to_server:
+            upload_grasp(grasp_pose_file, "Ewha Glab", sample_id, server_url)
+
+        end_time = time.time()
+        download_time = middle_time - start_time
+        execution_time = end_time - start_time
+        print_console_and_file(f"다운로 시간: {download_time:.6f}초", processing_dir)
+        print_console_and_file(f"코드 실행 시간: {execution_time:.6f}초", processing_dir)
