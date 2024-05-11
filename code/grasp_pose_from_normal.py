@@ -344,11 +344,13 @@ def save_grasp_pose(grasps_dir: str, grasp_pose_fixed: HomogeneousMatrixType) ->
 #     return priorities
 
 
-def visualize_grasp_pose(sample, grasp_pose_fixed, output_path):
+def visualize_grasp_pose(sample, grasp_pose_fixed, output_path, debug):
     mesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
     mesh.scale(0.1, center=(0, 0, 0))
     mesh = copy.deepcopy(mesh).transform(grasp_pose_fixed)
-    o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
+
+    if debug:
+        o3d.visualization.draw_geometries([sample.processing.cropped_point_cloud, mesh])
 
     X_W_C = sample.observation.camera_pose_in_world
     intrinsics = sample.observation.camera_intrinsics
@@ -442,7 +444,6 @@ def method2(sample, processing_dir, debug):
         tuning_vector = tuning_vector / np.linalg.norm(tuning_vector)
         tuning_scale = 0.02
 
-        debug = True
         if debug:
             point_1 = grasp_point
             point_2 = grasp_point + tuning_vector * tuning_scale
@@ -562,11 +563,10 @@ if __name__ == '__main__':
         if is_success:
             print("Planning succeed!")
             print("Grasp pose is ", grasp_pose_fixed)
-            visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_success_idx{idx}.png")
+            visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_success_idx{idx}.png", debug)
             break
 
         idx = idx + 1
-
 
     # save
     grasps_dir = f"data/grasps_{sample_id}"
