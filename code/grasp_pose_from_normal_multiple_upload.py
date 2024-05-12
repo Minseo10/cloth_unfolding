@@ -536,7 +536,7 @@ if __name__ == '__main__':
     grasp_pose_fixed = None
     is_success = None
 
-    while True:
+    while idx < 7:
         if idx == 1 or idx == 2 or idx % 2 == 0:
             grasp_pose_fixed = method1(x_offset, sample, processing_dir, debug)
             x_offset += 300
