@@ -475,12 +475,14 @@ if __name__ == '__main__':
         sample_dir = Path(observation_dir + "/../")
 
     else:
-        sample_id = f"sample_{'{0:06d}'.format(1)}"
+        sample_id = f"sample_{'{0:06d}'.format(0)}"
         sample_dir = Path(f"../datasets/cloth_competition_dataset_0000/{sample_id}")
         observation_dir = sample_dir / "observation_start"
 
     print(f">>> processing {sample_dir}")
     middle_time = time.time()
+
+    print(f"다운로 시간: {middle_time - start_time:.6f}초")
 
     sample = Sample(
         observation=load_competition_observation(observation_dir),
@@ -541,42 +543,33 @@ if __name__ == '__main__':
         else:
             grasp_pose_fixed = method2(sample, processing_dir, debug)
 
-        # check motion planning
-        is_success = gp.is_grasp_executable_fn(sample.observation, grasp_pose_fixed)
+        ######### start of save #########
+        grasps_dir = f"data/grasps_{sample_id}"
+        grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
+        visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_idx{idx}_.png", debug)
 
-        if not is_success:
-            for angle_idx, angle in enumerate([0, np.pi / 2, np.pi, 3 * np.pi / 2]):
-                print(f"grasp_pose_fixed: \n{grasp_pose_fixed}")
-                rotated_pose = grasp_pose_fixed.copy()
+        print("upload_grasp_pose_to_server\n", grasp_pose_fixed)
+        if to_server:
+            upload_grasp(grasp_pose_file, "Ewha Glab", sample_id, server_url)
+        ######### end of save #########
 
-                gp.rotate_grasps(rotated_pose, angle, 0.5)
-                print(f"rotated_pose_{angle_idx}: \n{rotated_pose}")
+        for angle_idx, angle in enumerate([0, np.pi / 2, np.pi, 3 * np.pi / 2]):
+            print(f"grasp_pose_fixed: \n{grasp_pose_fixed}")
+            rotated_pose = grasp_pose_fixed.copy()
 
-                if gp.is_grasp_executable_fn(sample.observation, rotated_pose):
-                    is_success = True
-                    grasp_pose_fixed = rotated_pose
+            gp.rotate_grasps(rotated_pose, angle, 0.5)
+            print(f"rotated_pose_{angle_idx}: \n{rotated_pose}")
 
-                else:
-                    is_success = False
-                    visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_failed_idx{idx}_angle{angle_idx}.png", debug)
+            grasp_pose_fixed = rotated_pose
 
-        if is_success:
-            print("Planning succeed!")
-            print("Grasp pose is ", grasp_pose_fixed)
-            visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_success_idx{idx}.png", debug)
-            break
+            ######### start of save #########
+            grasps_dir = f"data/grasps_{sample_id}"
+            grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
+            visualize_grasp_pose(sample, grasp_pose_fixed, processing_dir / f"grasp_pose_idx{idx}_angle{angle_idx}.png", debug)
+
+            print("upload_grasp_pose_to_server\n", grasp_pose_fixed)
+            if to_server:
+                upload_grasp(grasp_pose_file, "Ewha Glab", sample_id, server_url)
+            ######### end of save #########
 
         idx = idx + 1
-
-    # save
-    grasps_dir = f"data/grasps_{sample_id}"
-    grasp_pose_file = save_grasp_pose(grasps_dir, grasp_pose_fixed)
-
-    if to_server:
-        upload_grasp(grasp_pose_file, "Ewha Glab", sample_id, server_url)
-
-    end_time = time.time()
-    download_time = middle_time - start_time
-    execution_time = end_time - start_time
-    print(f"다운로 시간: {download_time:.6f}초")
-    print(f"코드 실행 시간: {execution_time:.6f}초")
