@@ -557,8 +557,7 @@ if __name__ == '__main__':
 
                 else:
                     is_success = False
-                    if debug:
-                        visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_failed_idx{idx}_angle{angle_idx}.png")
+                    visualize_grasp_pose(sample, rotated_pose, processing_dir / f"grasp_pose_failed_idx{idx}_angle{angle_idx}.png")
 
         if is_success:
             print("Planning succeed!")
