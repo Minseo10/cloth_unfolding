@@ -554,6 +554,7 @@ if __name__ == '__main__':
 
                 if gp.is_grasp_executable_fn(sample.observation, rotated_pose):
                     is_success = True
+                    grasp_pose_fixed = rotated_pose
 
                 else:
                     is_success = False
