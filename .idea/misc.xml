@@ -3,5 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="cloths_segmentation" />
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="cloths_segmentation" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="cloth_unfolding" project-jdk-type="Python SDK" />
 </project>

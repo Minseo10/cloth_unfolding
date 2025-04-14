@@ -19,7 +19,14 @@ from airo_typing import (
     PointCloud,
 )
 
-from grasp_pose_from_normal import convert_to_o3d_pcd
+# from grasp_pose_from_normal import convert_to_o3d_pcd
+
+def convert_to_o3d_pcd(pcd: PointCloud):
+    o3d_pcd = o3d.geometry.PointCloud()
+    o3d_pcd.points = o3d.utility.Vector3dVector(pcd.points)
+    o3d_pcd.colors = o3d.utility.Vector3dVector(pcd.colors / 255.0)
+
+    return o3d_pcd
 
 
 def segmentation(image: NumpyIntImageType, output_dir: Path):
@@ -168,6 +175,55 @@ def camera_to_world(camera_extrinsics:CameraExtrinsicMatrixType, point):
     return [x_world, y_world, z_world]
 
 
+def world_to_camera(camera_extrinsics: CameraExtrinsicMatrixType, point):
+    extrinsics_array = np.asarray(camera_extrinsics)
+
+    x = extrinsics_array[0][3]
+    y = extrinsics_array[1][3]
+    z = extrinsics_array[2][3]
+
+    # Create translation matrix
+    p = np.array([
+        [1, 0, 0, x],
+        [0, 1, 0, y],
+        [0, 0, 1, z],
+        [0, 0, 0, 1]
+    ])
+
+    # Combine rotation and translation to get transformation matrix
+    R = extrinsics_array[0:3, 0:3]
+    T = np.dot(p, np.vstack([np.hstack([R, np.zeros((3, 1))]), [0, 0, 0, 1]]))
+
+    # Compute the inverse transformation (world to camera)
+    T_inv = np.linalg.inv(T)
+
+    # Convert input point to homogeneous coordinates
+    point_world = np.array([point[0], point[1], point[2], 1])
+
+    # Apply inverse transformation
+    point_camera = np.dot(T_inv, point_world)
+
+    return [point_camera[0], point_camera[1], point_camera[2]]
+
+
+def get_camera_axes_in_world(camera_extrinsics: CameraExtrinsicMatrixType):
+    extrinsics_array = np.asarray(camera_extrinsics)
+
+    # Extract rotation matrix (3x3)
+    R = extrinsics_array[0:3, 0:3]
+
+    # Each column of R is a camera axis expressed in world frame
+    x_axis_world = R[:, 0]  # Camera x-axis in world frame
+    y_axis_world = R[:, 1]  # Camera y-axis in world frame
+    z_axis_world = R[:, 2]  # Camera z-axis in world frame
+
+    return {
+        "x": x_axis_world,
+        "y": y_axis_world,
+        "z": z_axis_world
+    }
+
+
 # high: 커질수록 위쪽, width: 작아질수록 오른쪽
 def crop_condition(points, high, width):
     z = high * np.max(points[:, 2]) + (1 - high) * np.min(points[:, 2])
@@ -244,7 +300,7 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
             print("3D Bounding box points: \n", box_3d)
             print("Max Min bounds: \n", max_coordinates, "\n", min_coordinates)
 
-        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.3, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.3, max_coordinates[2]+0.5))
+        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.2, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.2, max_coordinates[2]+0.5))
         cropped_pcd = pcd.crop(bbox)
 
         return cropped_pcd
@@ -320,7 +376,7 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
         pcd.colors = o3d.utility.Vector3dVector(colors)
 
         if debug:
-            o3d.visualization.draw_geometries([pcd])
+            o3d.visualization.draw_geometries([pcd], window_name="cut outlier")
 
         return pcd
 
@@ -329,13 +385,31 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
     crop1_pcd = crop_with_bbox(pcd)
     o3d.io.write_point_cloud(str(output_dir / "crop1.ply"), crop1_pcd)
 
-    crop2_pcd = crop_robot_arm(crop1_pcd)
-    o3d.io.write_point_cloud(str(output_dir / "crop2.ply"), crop1_pcd)
+    # crop2_pcd = crop_robot_arm(crop1_pcd)
+    # o3d.io.write_point_cloud(str(output_dir / "crop2.ply"), crop1_pcd)
 
-    crop3_pcd = cut_outlier(crop2_pcd)
-    o3d.io.write_point_cloud(str(output_dir / "crop3.ply"), crop1_pcd)
+    crop3_pcd = cut_outlier(crop1_pcd)
+    o3d.io.write_point_cloud(str(output_dir / "crop3.ply"), crop3_pcd)
 
     return crop3_pcd
+
+def remove_table(pcd: o3d.geometry.PointCloud, output_dir: Path, distance_threshold=0.01, debug=False):
+    plane_model, inliers = pcd.segment_plane(distance_threshold=distance_threshold,
+                                             ransac_n=3,
+                                             num_iterations=1000)
+    [a, b, c, d] = plane_model
+    print(f"Plane equation: {a:.2f}x + {b:.2f}y + {c:.2f}z + {d:.2f} = 0")
+
+    table_cloud = pcd.select_by_index(inliers)
+    table_cloud.paint_uniform_color([1.0, 0, 0])
+    object_cloud = pcd.select_by_index(inliers, invert=True)
+
+    o3d.io.write_point_cloud(str(output_dir / "without_table.ply"), object_cloud)
+
+    if debug:
+        o3d.visualization.draw_geometries([table_cloud, object_cloud], window_name="Plane Segmentation")
+
+    return object_cloud
 
 # if __name__ == '__main__':
 #     # model = create_model("Unet_2020-10-30")
