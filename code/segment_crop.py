@@ -240,7 +240,6 @@ def crop_condition(points, high, width):
 # 3. remove outlier
 def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
          camera_intrinsics: CameraIntrinsicsMatrixType,
-         camera_extrinsic: CameraExtrinsicMatrixType,
          point_cloud: PointCloud, output_dir: Path, debug = False):
 
     if not os.path.exists(output_dir):
@@ -280,8 +279,8 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
             new_point_2 = [point[0], point[1], point[2]]
 
             # camera -> world frame
-            new_point_1 = camera_to_world(camera_extrinsic, new_point_1)
-            new_point_2 = camera_to_world(camera_extrinsic, new_point_2)
+            # new_point_1 = camera_to_world(camera_extrinsic, new_point_1)
+            # new_point_2 = camera_to_world(camera_extrinsic, new_point_2)
 
             box_3d.append(new_point_1)
             box_3d.append(new_point_2)
@@ -388,10 +387,10 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
     # crop2_pcd = crop_robot_arm(crop1_pcd)
     # o3d.io.write_point_cloud(str(output_dir / "crop2.ply"), crop1_pcd)
 
-    crop3_pcd = cut_outlier(crop1_pcd)
-    o3d.io.write_point_cloud(str(output_dir / "crop3.ply"), crop3_pcd)
+    # crop3_pcd = cut_outlier(crop1_pcd)
+    # o3d.io.write_point_cloud(str(output_dir / "crop3.ply"), crop3_pcd)
 
-    return crop3_pcd
+    return crop1_pcd
 
 def remove_table(pcd: o3d.geometry.PointCloud, output_dir: Path, distance_threshold=0.01, debug=False):
     plane_model, inliers = pcd.segment_plane(distance_threshold=distance_threshold,
