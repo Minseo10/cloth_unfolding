@@ -6,11 +6,11 @@ import os
 import pyrealsense2 as rs
 import open3d as o3d
 import json
-
+from cloth_unfolding.code.color3dmapper import ColorTo3DMapper
 from PIL import Image
 from iglovikov_helper_functions.utils.image_utils import load_rgb, pad, unpad
 from iglovikov_helper_functions.dl.pytorch.utils import tensor_from_rgb_image
-from cloths_segmentation.cloths_segmentation.pre_trained_models import create_model
+from cloth_unfolding.cloths_segmentation.cloths_segmentation.pre_trained_models import create_model
 from pathlib import Path
 from airo_typing import (
     CameraExtrinsicMatrixType,
@@ -72,7 +72,8 @@ def contour(binary_image: NumpyIntImageType, output_dir: Path, debug: bool = Fal
     max_width = int(width * 0.8)
 
     # 좌우 자르기 (모니터가 옷으로 검출되는 경우가 있음 dataset0/sample65)
-    image[:, min_width:max_width] = (binary_image * 255).astype(np.uint8)[:, min_width:max_width]
+    # image[:, min_width:max_width] = (binary_image * 255).astype(np.uint8)[:, min_width:max_width]
+    image = (binary_image * 255).astype(np.uint8)
 
     contours, _ = cv2.findContours(image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -238,71 +239,52 @@ def crop_condition(points, high, width):
 # 1. crop with segmented bbox
 # 2. crop robot arm
 # 3. remove outlier
-def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
+def crop(bbox_coordinates: list, rgb_image_path:str, depth_image_path: str,
          camera_intrinsics: CameraIntrinsicsMatrixType,
          point_cloud: PointCloud, output_dir: Path, debug = False):
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
+    # Instantiate mapper and project to 3D
+    depth_K = {"fx": 394.7567, "fy": 394.7567, "cx": 321.3488, "cy": 240.4375}
+    color_K = {"fx": 385.767, "fy": 385.089, "cx": 327.746, "cy": 244.966}
+    R = np.array([
+        [0.9999993, -0.0011171, -0.0002352],
+        [0.0011170, 0.9999993, -0.0004513],
+        [0.0002357, 0.0004511, 0.9999999]
+    ])
+    t = np.array([-0.05923, -0.000169, 0.0002484])
+
+    mapper = ColorTo3DMapper(depth_image_path, rgb_image_path, depth_K, color_K, R, t)
+
     def crop_with_bbox(pcd: o3d.geometry.PointCloud)-> o3d.geometry.PointCloud:
         x, y, w, h = bbox_coordinates
-        center = [x + w/2, y + h/2]
-        box_points = [[x + w/2, y + h/2]]
+        x_min, x_max = int(x), int(x + w)
+        y_min, y_max = int(y), int(y + h)
 
-        depth_image_head = Image.fromarray(depth_image).convert("L")
-        depth_array = np.array(depth_image_head) / 255.
+        # bbox 안에 있는 projected_uvs의 index 추출
+        mask = (
+                (mapper.projected_uvs[:, 0] >= x_min) &
+                (mapper.projected_uvs[:, 0] < x_max) &
+                (mapper.projected_uvs[:, 1] >= y_min) &
+                (mapper.projected_uvs[:, 1] < y_max)
+        )
 
-        intrinsics = rs.intrinsics()
+        points_in_bbox = mapper.points[mask]
 
-        intrinsics.width = depth_image.shape[1]
-        intrinsics.height = depth_image.shape[0]
+        if points_in_bbox.shape[0] == 0:
+            print("No valid points in bbox")
+            return pcd
 
-        intrinsic_array = np.asarray(camera_intrinsics)
-        intrinsics.ppx = intrinsic_array[0][2]
-        intrinsics.ppy = intrinsic_array[1][2]
-        intrinsics.fx = intrinsic_array[0][0]
-        intrinsics.fy = intrinsic_array[1][1]
-        intrinsics.model = rs.distortion.brown_conrady
+        # axis-aligned bounding box 계산
+        min_bound = points_in_bbox.min(axis=0)
+        max_bound = points_in_bbox.max(axis=0)
 
-        box_points_world = []
-        for point in box_points:
-            point_3d = rs.rs2_deproject_pixel_to_point(intrinsics, [int(point[0]), int(point[1])],
-                                                          depth_array[int(center[0]), int(center[1])])
-            box_points_world.append(point_3d)
-
-        box_3d = []
-        max_coordinates = [-100, -100, -100]
-        min_coordinates = [100, 100, 100]
-        for point in box_points_world:
-            new_point_1 = [point[0], point[1], point[2]]
-            new_point_2 = [point[0], point[1], point[2]]
-
-            # camera -> world frame
-            # new_point_1 = camera_to_world(camera_extrinsic, new_point_1)
-            # new_point_2 = camera_to_world(camera_extrinsic, new_point_2)
-
-            box_3d.append(new_point_1)
-            box_3d.append(new_point_2)
-
-            for i in range(3):
-                if new_point_1[i] > max_coordinates[i]:
-                    max_coordinates[i] = new_point_1[i]
-                if new_point_1[i] < min_coordinates[i]:
-                    min_coordinates[i] = new_point_1[i]
-                if new_point_2[i] > max_coordinates[i]:
-                    max_coordinates[i] = new_point_2[i]
-                if new_point_2[i] < min_coordinates[i]:
-                    min_coordinates[i] = new_point_2[i]
-
-        if debug:
-            print("3D Bounding box points: \n", box_3d)
-            print("Max Min bounds: \n", max_coordinates, "\n", min_coordinates)
-
-        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=(min_coordinates[0]-0.5, min_coordinates[1]-0.2, min_coordinates[2]-0.6), max_bound=(max_coordinates[0]+1.0, max_coordinates[1]+0.2, max_coordinates[2]+0.5))
+        bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=min_bound, max_bound=max_bound)
         cropped_pcd = pcd.crop(bbox)
-
         return cropped_pcd
+
 
     def crop_robot_arm(pcd: o3d.geometry.PointCloud) -> o3d.geometry.PointCloud:
         points = np.asarray(pcd.points)
@@ -350,7 +332,7 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
 
     # 가장자리 조금 자르기 remove outlier
     def cut_outlier(pcd: o3d.geometry.PointCloud) -> o3d.geometry.PointCloud:
-        iqr_multiplier = 2.0 # 낮출수록 많이 잘려나감
+        iqr_multiplier = 0.5 # 낮출수록 많이 잘려나감
 
         points = np.asarray(pcd.points)
         colors = np.asarray(pcd.colors)
@@ -387,10 +369,10 @@ def crop(bbox_coordinates: list, depth_image: NumpyIntImageType,
     # crop2_pcd = crop_robot_arm(crop1_pcd)
     # o3d.io.write_point_cloud(str(output_dir / "crop2.ply"), crop1_pcd)
 
-    # crop3_pcd = cut_outlier(crop1_pcd)
-    # o3d.io.write_point_cloud(str(output_dir / "crop3.ply"), crop3_pcd)
+    crop3_pcd = cut_outlier(crop1_pcd)
+    o3d.io.write_point_cloud(str(output_dir / "crop3.ply"), crop3_pcd)
 
-    return crop1_pcd
+    return crop3_pcd
 
 def remove_table(pcd: o3d.geometry.PointCloud, output_dir: Path, distance_threshold=0.01, debug=False):
     plane_model, inliers = pcd.segment_plane(distance_threshold=distance_threshold,
